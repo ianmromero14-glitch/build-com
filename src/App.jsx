@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from "react";
 
 const SUPABASE_URL = "https://zbvxrwftgtiwtlqzgztv.supabase.co";
@@ -59,11 +58,7 @@ async function uploadFile(token, file, relatedId, relatedType, db) {
   const path = `${relatedType}/${relatedId}/${Date.now()}.${ext}`;
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/job-files/${path}`, {
     method: "POST",
-    headers: {
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": file.type,
-    },
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`, "Content-Type": file.type },
     body: file,
   });
   if (!res.ok) { const e = await res.text(); throw new Error(e); }
@@ -126,7 +121,7 @@ function Field({ label, value, onChange, type = "text", options, disabled }) {
   );
 }
 
-// ─── FILE UPLOAD PANEL ────────────────────────────────────────────────────────
+// ─── FILE PANEL ───────────────────────────────────────────────────────────────
 function FilePanel({ relatedId, relatedType, token, db }) {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -136,10 +131,8 @@ function FilePanel({ relatedId, relatedType, token, db }) {
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
-    try {
-      const data = await db.list("files", `select=*&related_id=eq.${relatedId}&order=created_at.desc`);
-      setFiles(data);
-    } catch (e) { console.error(e); }
+    try { setFiles(await db.list("files", `select=*&related_id=eq.${relatedId}&order=created_at.desc`)); }
+    catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [db, relatedId]);
 
@@ -150,9 +143,7 @@ function FilePanel({ relatedId, relatedType, token, db }) {
     if (!selected.length) return;
     setUploading(true);
     try {
-      for (const file of selected) {
-        await uploadFile(token, file, relatedId, relatedType, db);
-      }
+      for (const file of selected) await uploadFile(token, file, relatedId, relatedType, db);
       await loadFiles();
     } catch (err) { alert("Upload failed: " + err.message); }
     finally { setUploading(false); }
@@ -160,44 +151,35 @@ function FilePanel({ relatedId, relatedType, token, db }) {
 
   const deleteFile = async (file) => {
     if (!confirm("Delete this file?")) return;
-    try {
-      await db.delete("files", file.id);
-      setFiles(files.filter(f => f.id !== file.id));
-    } catch (e) { alert("Delete failed: " + e.message); }
+    try { await db.delete("files", file.id); setFiles(files.filter(f => f.id !== file.id)); }
+    catch (e) { alert("Delete failed: " + e.message); }
   };
 
   const isImage = (f) => f.type?.startsWith("image/");
-  const isDoc = (f) => f.type?.includes("pdf") || f.type?.includes("word") || f.type?.includes("document");
-
   const photos = files.filter(isImage);
   const docs = files.filter(f => !isImage(f));
 
   return (
     <div>
-      {/* Upload Button */}
       <div className="flex items-center gap-3 mb-5">
         <button onClick={() => fileRef.current.click()} disabled={uploading}
-          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors flex items-center gap-2">
+          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-sm flex items-center gap-2">
           {uploading ? "Uploading..." : "📎 Upload Files"}
         </button>
-        <span className="text-xs text-gray-400">Photos, PDFs, contracts, permits...</span>
-        <input ref={fileRef} type="file" multiple className="hidden" onChange={handleUpload}
-          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+        <span className="text-xs text-gray-400">Photos, PDFs, contracts...</span>
+        <input ref={fileRef} type="file" multiple className="hidden" onChange={handleUpload} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
       </div>
-
       {loading ? <Spinner /> : (
         <>
-          {/* Photos */}
           {photos.length > 0 && (
             <div className="mb-6">
-              <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">📸 Photos <span className="text-gray-400 font-normal">({photos.length})</span></h4>
+              <h4 className="text-sm font-bold text-gray-700 mb-3">📸 Photos ({photos.length})</h4>
               <div className="grid grid-cols-3 gap-2">
                 {photos.map(f => (
                   <div key={f.id} className="relative group rounded-xl overflow-hidden aspect-square bg-gray-100">
-                    <img src={f.url} alt={f.name} className="w-full h-full object-cover cursor-pointer"
-                      onClick={() => setLightbox(f)} />
+                    <img src={f.url} alt={f.name} className="w-full h-full object-cover cursor-pointer" onClick={() => setLightbox(f)} />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
-                      <button onClick={() => setLightbox(f)} className="bg-white rounded-full p-1.5 text-gray-700 text-xs">🔍</button>
+                      <button onClick={() => setLightbox(f)} className="bg-white rounded-full p-1.5 text-xs">🔍</button>
                       <button onClick={() => deleteFile(f)} className="bg-white rounded-full p-1.5 text-red-500 text-xs">🗑</button>
                     </div>
                   </div>
@@ -205,30 +187,21 @@ function FilePanel({ relatedId, relatedType, token, db }) {
               </div>
             </div>
           )}
-
-          {/* Documents */}
           {docs.length > 0 && (
             <div className="mb-4">
-              <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">📄 Documents <span className="text-gray-400 font-normal">({docs.length})</span></h4>
+              <h4 className="text-sm font-bold text-gray-700 mb-3">📄 Documents ({docs.length})</h4>
               <div className="space-y-2">
                 {docs.map(f => (
                   <div key={f.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
-                    <span className="text-2xl">{isDoc(f) ? "📄" : "📎"}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{f.name}</p>
-                      <p className="text-xs text-gray-400">{new Date(f.created_at).toLocaleDateString()}</p>
-                    </div>
-                    <a href={f.url} target="_blank" rel="noreferrer"
-                      className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">
-                      Open
-                    </a>
+                    <span className="text-2xl">📄</span>
+                    <div className="flex-1 min-w-0"><p className="text-sm font-medium text-gray-800 truncate">{f.name}</p><p className="text-xs text-gray-400">{new Date(f.created_at).toLocaleDateString()}</p></div>
+                    <a href={f.url} target="_blank" rel="noreferrer" className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100">Open</a>
                     <button onClick={() => deleteFile(f)} className="text-xs text-red-400 hover:text-red-600">✕</button>
                   </div>
                 ))}
               </div>
             </div>
           )}
-
           {files.length === 0 && (
             <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-2xl">
               <p className="text-gray-400 text-sm">No files yet</p>
@@ -237,8 +210,6 @@ function FilePanel({ relatedId, relatedType, token, db }) {
           )}
         </>
       )}
-
-      {/* Lightbox */}
       {lightbox && (
         <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
           <div className="relative max-w-4xl w-full" onClick={e => e.stopPropagation()}>
@@ -246,9 +217,8 @@ function FilePanel({ relatedId, relatedType, token, db }) {
             <div className="flex items-center justify-between mt-3">
               <p className="text-white text-sm">{lightbox.name}</p>
               <div className="flex gap-2">
-                <a href={lightbox.url} target="_blank" rel="noreferrer"
-                  className="bg-white/20 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-white/30">Download</a>
-                <button onClick={() => setLightbox(null)} className="bg-white/20 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-white/30">Close</button>
+                <a href={lightbox.url} target="_blank" rel="noreferrer" className="bg-white/20 text-white px-3 py-1.5 rounded-lg text-sm">Download</a>
+                <button onClick={() => setLightbox(null)} className="bg-white/20 text-white px-3 py-1.5 rounded-lg text-sm">Close</button>
               </div>
             </div>
           </div>
@@ -273,66 +243,50 @@ function DetailModal({ item, type, token, db, onClose, onUpdate }) {
     finally { setSaving(false); }
   };
 
-  const tabs = ["details", "photos", "documents", "notes"];
-
   return (
     <Modal title={item.name || item.title} onClose={onClose} wide>
-      {/* Tabs */}
       <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
-        {tabs.map(t => (
+        {["details", "photos", "documents", "notes"].map(t => (
           <button key={t} onClick={() => setActiveTab(t)}
             className={`flex-1 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${activeTab === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
             {t === "photos" ? "📸 Photos" : t === "documents" ? "📄 Docs" : t === "notes" ? "📝 Notes" : "ℹ️ Details"}
           </button>
         ))}
       </div>
-
-      {/* Details Tab */}
       {activeTab === "details" && (
         <div className="space-y-3">
           {type === "lead" ? (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Email</p><p className="text-sm font-medium text-gray-800 truncate">{item.email || "—"}</p></div>
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Phone</p><p className="text-sm font-medium text-gray-800">{item.phone || "—"}</p></div>
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Source</p><p className="text-sm font-medium text-gray-800">{item.source || "—"}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Email</p><p className="text-sm font-medium truncate">{item.email || "—"}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Phone</p><p className="text-sm font-medium">{item.phone || "—"}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Source</p><p className="text-sm font-medium">{item.source || "—"}</p></div>
                 <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Status</p><Badge label={item.status} /></div>
               </div>
-              {item.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium text-gray-800">{item.address}</p></div>}
+              {item.assigned_name && <div className="bg-amber-50 border border-amber-100 rounded-xl p-3"><p className="text-xs text-amber-600">Assigned To</p><p className="text-sm font-semibold text-amber-800">👤 {item.assigned_name}</p></div>}
+              {item.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium">{item.address}</p></div>}
             </>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Customer</p><p className="text-sm font-medium text-gray-800">{item.customer || "—"}</p></div>
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Type</p><p className="text-sm font-medium text-gray-800">{item.type || "—"}</p></div>
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Value</p><p className="text-sm font-medium text-gray-800">${Number(item.value || 0).toLocaleString()}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Customer</p><p className="text-sm font-medium">{item.customer || "—"}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Type</p><p className="text-sm font-medium">{item.type || "—"}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Value</p><p className="text-sm font-medium">${Number(item.value || 0).toLocaleString()}</p></div>
                 <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Status</p><Badge label={item.status} /></div>
               </div>
-              {item.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium text-gray-800">{item.address}</p></div>}
-              {item.start_date && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Start Date</p><p className="text-sm font-medium text-gray-800">{item.start_date}</p></div>}
+              {item.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium">{item.address}</p></div>}
+              {item.start_date && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Start Date</p><p className="text-sm font-medium">{item.start_date}</p></div>}
             </>
           )}
         </div>
       )}
-
-      {/* Photos Tab */}
-      {activeTab === "photos" && (
-        <FilePanel relatedId={item.id} relatedType={`${type}-photos`} token={token} db={db} />
-      )}
-
-      {/* Documents Tab */}
-      {activeTab === "documents" && (
-        <FilePanel relatedId={item.id} relatedType={`${type}-docs`} token={token} db={db} />
-      )}
-
-      {/* Notes Tab */}
+      {activeTab === "photos" && <FilePanel relatedId={item.id} relatedType={`${type}-photos`} token={token} db={db} />}
+      {activeTab === "documents" && <FilePanel relatedId={item.id} relatedType={`${type}-docs`} token={token} db={db} />}
       {activeTab === "notes" && (
         <div>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={8}
-            placeholder="Add notes, comments, or activity..."
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={8} placeholder="Add notes, comments, or activity..."
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none mb-3" />
-          <button onClick={saveNotes} disabled={saving}
-            className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">
+          <button onClick={saveNotes} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">
             {saving ? "Saving..." : "Save Notes"}
           </button>
         </div>
@@ -343,19 +297,27 @@ function DetailModal({ item, type, token, db, onClose, onUpdate }) {
 
 // ─── LEADS ───────────────────────────────────────────────────────────────────
 const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Lost"];
-function LeadsView({ db, token }) {
+function LeadsView({ db, token, profile }) {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", source: "Referral", status: "New", notes: "" });
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", source: "Referral", status: "New", notes: "", assigned_to: "", assigned_name: "" });
+  const isAdmin = profile?.role === "admin";
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setLeads(await db.list("leads")); }
-    catch (e) { console.error(e); }
+    try {
+      const [leadsData, members] = await Promise.all([
+        db.list("leads"),
+        db.list("profiles", "select=*&order=full_name.asc"),
+      ]);
+      setLeads(leadsData);
+      setTeamMembers(members);
+    } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [db]);
   useEffect(() => { load(); }, [load]);
@@ -369,12 +331,21 @@ function LeadsView({ db, token }) {
     if (!form.name) return;
     setSaving(true);
     try {
-      const [created] = await db.insert("leads", form);
+      const payload = { ...form };
+      if (!payload.assigned_to) { delete payload.assigned_to; delete payload.assigned_name; }
+      const [created] = await db.insert("leads", payload);
       setLeads([created, ...leads]);
-      setForm({ name: "", phone: "", email: "", address: "", source: "Referral", status: "New", notes: "" });
+      setForm({ name: "", phone: "", email: "", address: "", source: "Referral", status: "New", notes: "", assigned_to: "", assigned_name: "" });
       setShowModal(false);
     } catch (e) { alert("Error: " + e.message); }
     finally { setSaving(false); }
+  };
+
+  const assignLead = async (lead, memberId) => {
+    const member = teamMembers.find(m => m.id === memberId);
+    const update = { assigned_to: memberId || null, assigned_name: member?.full_name || member?.email || null };
+    setLeads(leads.map(l => l.id === lead.id ? { ...l, ...update } : l));
+    try { await db.update("leads", lead.id, update); } catch { load(); }
   };
 
   const updateStatus = async (id, status) => {
@@ -391,7 +362,10 @@ function LeadsView({ db, token }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div><h2 className="text-2xl font-bold text-gray-900">Leads & Contacts</h2><p className="text-sm text-gray-500 mt-0.5">{leads.length} total</p></div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Leads & Contacts</h2>
+          <p className="text-sm text-gray-500 mt-0.5">{leads.length} {isAdmin ? "total" : "assigned to you"}</p>
+        </div>
         <button onClick={() => setShowModal(true)} className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-xl text-sm">+ Add Lead</button>
       </div>
       <input placeholder="Search leads..." value={search} onChange={e => setSearch(e.target.value)}
@@ -407,15 +381,23 @@ function LeadsView({ db, token }) {
                   <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-gray-900">{lead.name}</span><Badge label={lead.status} /></div>
                   <p className="text-sm text-gray-500 mt-0.5">{lead.email}{lead.phone ? ` · ${lead.phone}` : ""}</p>
                   {lead.address && <p className="text-xs text-gray-400 mt-0.5 truncate">{lead.address}</p>}
+                  {lead.assigned_name && <p className="text-xs mt-1 text-amber-600 font-medium">👤 {lead.assigned_name}</p>}
                 </div>
                 <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
                   <select value={lead.status} onChange={e => updateStatus(lead.id, e.target.value)}
                     className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
                     {LEAD_STATUSES.map(s => <option key={s}>{s}</option>)}
                   </select>
+                  {isAdmin && (
+                    <select value={lead.assigned_to || ""} onChange={e => assignLead(lead, e.target.value)}
+                      className="text-xs border border-amber-200 rounded-lg px-2 py-1 bg-amber-50 text-amber-700 focus:outline-none max-w-[130px]">
+                      <option value="">Unassigned</option>
+                      {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
+                    </select>
+                  )}
                   <div className="flex gap-2">
                     <button onClick={() => setSelected(lead)} className="text-xs text-blue-400 hover:text-blue-600">View</button>
-                    <button onClick={() => deleteLead(lead.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                    {isAdmin && <button onClick={() => deleteLead(lead.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>}
                   </div>
                 </div>
               </div>
@@ -423,7 +405,6 @@ function LeadsView({ db, token }) {
           ))}
         </div>
       )}
-
       {showModal && (
         <Modal title="Add New Lead" onClose={() => setShowModal(false)}>
           <Field label="Full Name *" value={form.name} onChange={v => setForm({ ...form, name: v })} />
@@ -432,11 +413,22 @@ function LeadsView({ db, token }) {
           <Field label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} />
           <Field label="Source" value={form.source} onChange={v => setForm({ ...form, source: v })} options={["Referral", "Website", "Door Knock", "Social Media", "Other"]} />
           <Field label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })} options={LEAD_STATUSES} />
+          {isAdmin && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Assign To Team Member</label>
+              <select value={form.assigned_to} onChange={e => {
+                const member = teamMembers.find(m => m.id === e.target.value);
+                setForm({ ...form, assigned_to: e.target.value, assigned_name: member?.full_name || member?.email || "" });
+              }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white">
+                <option value="">Unassigned</option>
+                {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
+              </select>
+            </div>
+          )}
           <Field label="Notes" value={form.notes} onChange={v => setForm({ ...form, notes: v })} type="textarea" />
           <button onClick={addLead} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">{saving ? "Saving..." : "Save Lead"}</button>
         </Modal>
       )}
-
       {selected && (
         <DetailModal item={selected} type="lead" token={token} db={db}
           onClose={() => setSelected(null)}
@@ -530,7 +522,6 @@ function JobsView({ db, token }) {
           ))}
         </div>
       )}
-
       {showModal && (
         <Modal title="Add New Job" onClose={() => setShowModal(false)}>
           <Field label="Job Title *" value={form.title} onChange={v => setForm({ ...form, title: v })} />
@@ -544,7 +535,6 @@ function JobsView({ db, token }) {
           <button onClick={addJob} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">{saving ? "Saving..." : "Save Job"}</button>
         </Modal>
       )}
-
       {selected && (
         <DetailModal item={selected} type="job" token={token} db={db}
           onClose={() => setSelected(null)}
@@ -876,6 +866,10 @@ function AdminPanel({ db, currentUser }) {
         <div><h2 className="text-2xl font-bold text-gray-900">Admin Panel</h2><p className="text-sm text-gray-500 mt-0.5">Manage your team</p></div>
         <button onClick={() => setShowInvite(true)} className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-xl text-sm">+ Add User</button>
       </div>
+      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-5">
+        <p className="text-sm text-amber-800 font-medium">👑 Admin Controls</p>
+        <p className="text-xs text-amber-600 mt-0.5">You can see all leads. Team members only see leads assigned to them.</p>
+      </div>
       {loading ? <Spinner /> : (
         <div className="grid gap-3">
           {users.map(user => (
@@ -1025,7 +1019,7 @@ export default function App() {
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
         {tab === "dashboard" && <Dashboard db={db} setTab={setTab} />}
-        {tab === "leads" && <LeadsView db={db} token={auth.session.access_token} />}
+        {tab === "leads" && <LeadsView db={db} token={auth.session.access_token} profile={auth.profile} />}
         {tab === "jobs" && <JobsView db={db} token={auth.session.access_token} />}
         {tab === "estimates" && <EstimatesView db={db} />}
         {tab === "tasks" && <TasksView db={db} />}
