@@ -932,7 +932,7 @@ function LoginScreen({ onLogin }) {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg"><span className="text-white text-3xl">⚒</span></div>
-          <h1 className="text-3xl font-bold text-gray-900">BuildCRM</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Simplicity</h1>
           <p className="text-gray-500 mt-1 text-sm">Sign in to your account</p>
         </div>
         <div className="bg-white rounded-2xl shadow-xl p-6">
@@ -991,7 +991,7 @@ export default function App() {
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center"><span className="text-white text-sm font-bold">⚒</span></div>
-            <span className="font-bold text-gray-900 text-lg tracking-tight">BuildCRM</span>
+            <span className="font-bold text-gray-900 text-lg tracking-tight">Simplicity</span>
           </div>
           <div className="relative">
             <button onClick={() => setShowUserMenu(!showUserMenu)} className="flex items-center gap-2">
