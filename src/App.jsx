@@ -15,6 +15,21 @@ const RESEND_KEY = "re_N8yv9ks4_26JJGC57Z9pkVrXGidhmqsF9";
 const ADMIN_EMAIL = "ianmromero14@gmail.com";
 
 // ─── SEND EMAIL VIA RESEND ────────────────────────────────────────────────────
+async function sendAccessRequestEmail(full_name, email, reason) {
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: "Simplicity CRM <onboarding@resend.dev>",
+        to: [ADMIN_EMAIL],
+        subject: `🔑 New Access Request from ${full_name}`,
+        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;"><div style="background:#1C1F22;border-radius:12px;padding:24px;margin-bottom:24px;"><h1 style="color:white;margin:0;font-size:22px;letter-spacing:2px;">SIMPLICITY</h1><p style="color:#6B7280;margin:4px 0 0;font-size:13px;">CRM</p></div><h2 style="color:#111827;">New Access Request</h2><p style="color:#6B7280;font-size:14px;">Someone is requesting access to Simplicity CRM.</p><div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:20px;margin:16px 0;"><p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Name</p><p style="margin:0 0 16px;color:#111827;font-weight:600;">${full_name}</p><p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Email</p><p style="margin:0 0 16px;color:#111827;">${email}</p><p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Reason</p><p style="margin:0;color:#111827;">${reason}</p></div><p style="color:#6B7280;font-size:14px;">Log into Admin Panel to approve or deny.</p><p style="color:#9CA3AF;font-size:12px;text-align:center;margin-top:24px;">Simplicity CRM · Sent automatically</p></div>`,
+      }),
+    });
+  } catch (e) { Sentry.captureException(e); }
+}
+
 async function sendRecommendationEmail(from_name, category, message) {
   try {
     await fetch("https://api.resend.com/emails", {
@@ -1153,16 +1168,160 @@ function AdminPanel({ db, currentUser }) {
           <button onClick={createUser} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Creating..." : "Create User"}</button>
         </Modal>
       )}
+      <AccessRequests db={db} />
+    </div>
+  );
+}
+
+// ─── ACCESS REQUESTS ──────────────────────────────────────────────────────────
+function AccessRequests({ db }) {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/access_requests?select=*&order=created_at.desc`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+      });
+      setRequests(await res.json());
+    } catch (e) { Sentry.captureException(e); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const updateStatus = async (id, status) => {
+    setRequests(requests.map(r => r.id === id ? { ...r, status } : r));
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/access_requests?id=eq.${id}`, {
+        method: "PATCH",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+    } catch (e) { Sentry.captureException(e); load(); }
+  };
+
+  const pending = requests.filter(r => r.status === "Pending");
+
+  return (
+    <div className="mt-8">
+      <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+        🔑 Access Requests
+        {pending.length > 0 && <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pending.length}</span>}
+      </h3>
+      {loading ? <Spinner /> : requests.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-8">No access requests yet</p>
+      ) : (
+        <div className="grid gap-3">
+          {requests.map(req => (
+            <div key={req.id} className={`bg-white rounded-2xl border shadow-sm p-4 ${req.status === "Pending" ? "border-gray-300" : "border-gray-100 opacity-70"}`}>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white font-bold flex-shrink-0">
+                  {req.full_name?.[0] || "?"}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900">{req.full_name}</span>
+                    <Badge label={req.status} />
+                  </div>
+                  <p className="text-sm text-gray-500 mt-0.5">{req.email}</p>
+                  <p className="text-sm text-gray-600 mt-1 italic">"{req.reason}"</p>
+                  <p className="text-xs text-gray-400 mt-1">{new Date(req.created_at).toLocaleDateString()}</p>
+                </div>
+                {req.status === "Pending" && (
+                  <div className="flex flex-col gap-2 flex-shrink-0">
+                    <button onClick={() => updateStatus(req.id, "Approved")}
+                      className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors">
+                      Approve
+                    </button>
+                    <button onClick={() => updateStatus(req.id, "Denied")}
+                      className="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors">
+                      Deny
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
+function RequestAccessScreen({ onBack }) {
+  const [form, setForm] = useState({ full_name: "", email: "", reason: "" });
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    if (!form.full_name || !form.email || !form.reason) { setError("Please fill in all fields"); return; }
+    setSaving(true); setError("");
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/access_requests`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json", "Prefer": "return=representation" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("Failed to submit");
+      await sendAccessRequestEmail(form.full_name, form.email, form.reason);
+      setDone(true);
+    } catch (e) { Sentry.captureException(e); setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  if (done) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4" style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+      <div className="text-center max-w-sm">
+        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><span className="text-3xl">✅</span></div>
+        <h2 className="text-xl font-bold text-gray-900 mb-2">Request Submitted!</h2>
+        <p className="text-gray-500 text-sm mb-6">Ian has been notified and will review your request. You'll be contacted at <strong>{form.email}</strong> once approved.</p>
+        <button onClick={onBack} className="text-sm text-gray-500 hover:text-gray-800 underline">Back to Sign In</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4" style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+      <div className="w-full max-w-sm">
+        <div className="flex justify-center mb-6"><TetrahedronLogin /></div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-1">Request Access</h1>
+        <p className="text-gray-500 text-sm mb-6">Fill in your details and we'll review your request.</p>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          {error && <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-4 text-sm text-red-600">⚠️ {error}</div>}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+            <input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} placeholder="John Smith"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+            <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="you@example.com"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Why do you need access? *</label>
+            <textarea value={form.reason} onChange={e => setForm({...form, reason: e.target.value})} rows={3} placeholder="I'm a team member at EJI..."
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none" />
+          </div>
+          <button onClick={submit} disabled={saving} className={`w-full ${btnPrimary} mb-3`}>{saving ? "Submitting..." : "Submit Request"}</button>
+          <button onClick={onBack} className="w-full text-sm text-gray-400 hover:text-gray-600 py-2">← Back to Sign In</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showRequest, setShowRequest] = useState(false);
+
+  if (showRequest) return <RequestAccessScreen onBack={() => setShowRequest(false)} />;
 
   const handleLogin = async () => {
     if (!email || !password) { setError("Please enter email and password"); return; }
@@ -1207,6 +1366,10 @@ function LoginScreen({ onLogin }) {
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </div>
+          <p className="text-center text-sm text-gray-400 mt-4">
+            Don't have access?{" "}
+            <button onClick={() => setShowRequest(true)} className="text-gray-700 font-semibold hover:underline">Request Access</button>
+          </p>
         </div>
       </div>
     </div>
