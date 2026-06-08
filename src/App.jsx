@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+
+import { useState, useEffect, useCallback, useRef } from "react";
 
 const SUPABASE_URL = "https://zbvxrwftgtiwtlqzgztv.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpidnhyd2Z0Z3Rpd3RscXpnenR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NzU4NDgsImV4cCI6MjA5NjM1MTg0OH0.uuyQAAeJxtlf6FzjRMEUvdfTy5VD3j3mfy8G_lXx_ag";
 
-// ─── AUTH HELPERS ─────────────────────────────────────────────────────────────
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
 async function signIn(email, password) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: "POST",
@@ -14,14 +15,12 @@ async function signIn(email, password) {
   if (!res.ok) throw new Error(data.error_description || data.error || data.msg || JSON.stringify(data));
   return data;
 }
-
 async function signOut(token) {
   await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
     method: "POST",
     headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
   });
 }
-
 async function getProfile(userId, token) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=*`, {
     headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
@@ -30,7 +29,7 @@ async function getProfile(userId, token) {
   return data[0] || null;
 }
 
-// ─── DB HELPERS ───────────────────────────────────────────────────────────────
+// ─── DB ───────────────────────────────────────────────────────────────────────
 function makeDb(token) {
   async function sbFetch(table, method = "GET", body = null, query = "") {
     const headers = {
@@ -54,6 +53,25 @@ function makeDb(token) {
   };
 }
 
+// ─── STORAGE ──────────────────────────────────────────────────────────────────
+async function uploadFile(token, file, relatedId, relatedType, db) {
+  const ext = file.name.split(".").pop();
+  const path = `${relatedType}/${relatedId}/${Date.now()}.${ext}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/job-files/${path}`, {
+    method: "POST",
+    headers: {
+      "apikey": SUPABASE_KEY,
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": file.type,
+    },
+    body: file,
+  });
+  if (!res.ok) { const e = await res.text(); throw new Error(e); }
+  const url = `${SUPABASE_URL}/storage/v1/object/public/job-files/${path}`;
+  await db.insert("files", { name: file.name, url, type: file.type, related_id: relatedId, related_type: relatedType });
+  return url;
+}
+
 // ─── UI HELPERS ───────────────────────────────────────────────────────────────
 const statusColors = {
   New: "bg-blue-100 text-blue-700", Contacted: "bg-yellow-100 text-yellow-700",
@@ -75,13 +93,10 @@ function Badge({ label }) {
 function Spinner() {
   return <div className="flex items-center justify-center py-16"><div className="w-8 h-8 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div></div>;
 }
-function ErrorMsg({ msg, onRetry }) {
-  return <div className="bg-red-50 border border-red-100 rounded-2xl p-5 text-center"><p className="text-red-600 font-medium text-sm mb-3">⚠️ {msg}</p><button onClick={onRetry} className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg">Retry</button></div>;
-}
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+      <div className={`bg-white rounded-2xl shadow-2xl w-full ${wide ? "max-w-3xl" : "max-w-lg"} overflow-hidden max-h-[90vh] flex flex-col`}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h3 className="text-lg font-bold text-gray-900">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
@@ -100,6 +115,9 @@ function Field({ label, value, onChange, type = "text", options, disabled }) {
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white disabled:opacity-50">
           {options.map(o => <option key={o}>{o}</option>)}
         </select>
+      ) : type === "textarea" ? (
+        <textarea value={value} onChange={e => onChange(e.target.value)} rows={3}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
       ) : (
         <input type={type} value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
           className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50" />
@@ -108,209 +126,236 @@ function Field({ label, value, onChange, type = "text", options, disabled }) {
   );
 }
 
-// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
-function LoginScreen({ onLogin }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+// ─── FILE UPLOAD PANEL ────────────────────────────────────────────────────────
+function FilePanel({ relatedId, relatedType, token, db }) {
+  const [files, setFiles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [lightbox, setLightbox] = useState(null);
+  const fileRef = useRef();
 
-  const handleLogin = async () => {
-    if (!email || !password) { setError("Please enter email and password"); return; }
-    setLoading(true); setError("");
+  const loadFiles = useCallback(async () => {
+    setLoading(true);
     try {
-      const session = await signIn(email, password);
-      const profile = await getProfile(session.user.id, session.access_token);
-      onLogin({ session, profile });
-    } catch (e) {
-      setError(e.message);
-    } finally { setLoading(false); }
+      const data = await db.list("files", `select=*&related_id=eq.${relatedId}&order=created_at.desc`);
+      setFiles(data);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [db, relatedId]);
+
+  useEffect(() => { loadFiles(); }, [loadFiles]);
+
+  const handleUpload = async (e) => {
+    const selected = Array.from(e.target.files);
+    if (!selected.length) return;
+    setUploading(true);
+    try {
+      for (const file of selected) {
+        await uploadFile(token, file, relatedId, relatedType, db);
+      }
+      await loadFiles();
+    } catch (err) { alert("Upload failed: " + err.message); }
+    finally { setUploading(false); }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <span className="text-white text-3xl">⚒</span>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">BuildCRM</h1>
-          <p className="text-gray-500 mt-1 text-sm">Sign in to your account</p>
-        </div>
+  const deleteFile = async (file) => {
+    if (!confirm("Delete this file?")) return;
+    try {
+      await db.delete("files", file.id);
+      setFiles(files.filter(f => f.id !== file.id));
+    } catch (e) { alert("Delete failed: " + e.message); }
+  };
 
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          {error && (
-            <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-4 text-sm text-red-600">
-              ⚠️ {error}
+  const isImage = (f) => f.type?.startsWith("image/");
+  const isDoc = (f) => f.type?.includes("pdf") || f.type?.includes("word") || f.type?.includes("document");
+
+  const photos = files.filter(isImage);
+  const docs = files.filter(f => !isImage(f));
+
+  return (
+    <div>
+      {/* Upload Button */}
+      <div className="flex items-center gap-3 mb-5">
+        <button onClick={() => fileRef.current.click()} disabled={uploading}
+          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors flex items-center gap-2">
+          {uploading ? "Uploading..." : "📎 Upload Files"}
+        </button>
+        <span className="text-xs text-gray-400">Photos, PDFs, contracts, permits...</span>
+        <input ref={fileRef} type="file" multiple className="hidden" onChange={handleUpload}
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
+      </div>
+
+      {loading ? <Spinner /> : (
+        <>
+          {/* Photos */}
+          {photos.length > 0 && (
+            <div className="mb-6">
+              <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">📸 Photos <span className="text-gray-400 font-normal">({photos.length})</span></h4>
+              <div className="grid grid-cols-3 gap-2">
+                {photos.map(f => (
+                  <div key={f.id} className="relative group rounded-xl overflow-hidden aspect-square bg-gray-100">
+                    <img src={f.url} alt={f.name} className="w-full h-full object-cover cursor-pointer"
+                      onClick={() => setLightbox(f)} />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                      <button onClick={() => setLightbox(f)} className="bg-white rounded-full p-1.5 text-gray-700 text-xs">🔍</button>
+                      <button onClick={() => deleteFile(f)} className="bg-white rounded-full p-1.5 text-red-500 text-xs">🗑</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-              onKeyDown={e => e.key === "Enter" && handleLogin()} />
+
+          {/* Documents */}
+          {docs.length > 0 && (
+            <div className="mb-4">
+              <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">📄 Documents <span className="text-gray-400 font-normal">({docs.length})</span></h4>
+              <div className="space-y-2">
+                {docs.map(f => (
+                  <div key={f.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                    <span className="text-2xl">{isDoc(f) ? "📄" : "📎"}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{f.name}</p>
+                      <p className="text-xs text-gray-400">{new Date(f.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <a href={f.url} target="_blank" rel="noreferrer"
+                      className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">
+                      Open
+                    </a>
+                    <button onClick={() => deleteFile(f)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {files.length === 0 && (
+            <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-2xl">
+              <p className="text-gray-400 text-sm">No files yet</p>
+              <p className="text-gray-300 text-xs mt-1">Upload photos, contracts, or documents</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4" onClick={() => setLightbox(null)}>
+          <div className="relative max-w-4xl w-full" onClick={e => e.stopPropagation()}>
+            <img src={lightbox.url} alt={lightbox.name} className="w-full max-h-[80vh] object-contain rounded-xl" />
+            <div className="flex items-center justify-between mt-3">
+              <p className="text-white text-sm">{lightbox.name}</p>
+              <div className="flex gap-2">
+                <a href={lightbox.url} target="_blank" rel="noreferrer"
+                  className="bg-white/20 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-white/30">Download</a>
+                <button onClick={() => setLightbox(null)} className="bg-white/20 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-white/30">Close</button>
+              </div>
+            </div>
           </div>
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-              onKeyDown={e => e.key === "Enter" && handleLogin()} />
-          </div>
-          <button onClick={handleLogin} disabled={loading}
-            className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md">
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
         </div>
-        <p className="text-center text-xs text-gray-400 mt-4">Construction CRM · Powered by BuildCRM</p>
-      </div>
+      )}
     </div>
   );
 }
 
-// ─── ADMIN PANEL ──────────────────────────────────────────────────────────────
-function AdminPanel({ db, currentUser }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [invitePassword, setInvitePassword] = useState("");
-  const [inviteRole, setInviteRole] = useState("member");
-  const [inviteName, setInviteName] = useState("");
+// ─── DETAIL MODAL ─────────────────────────────────────────────────────────────
+function DetailModal({ item, type, token, db, onClose, onUpdate }) {
+  const [activeTab, setActiveTab] = useState("details");
+  const [notes, setNotes] = useState(item.notes || "");
   const [saving, setSaving] = useState(false);
-  const [inviteMsg, setInviteMsg] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true); setError(null);
-    try { setUsers(await db.list("profiles", "select=*&order=created_at.desc")); }
-    catch (e) { setError(e.message); }
-    finally { setLoading(false); }
-  }, [db]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const updateRole = async (id, role) => {
-    setUsers(users.map(u => u.id === id ? { ...u, role } : u));
-    try { await db.update("profiles", id, { role }); }
-    catch (e) { load(); }
-  };
-
-  const createUser = async () => {
-    if (!inviteEmail || !invitePassword) return;
-    setSaving(true); setInviteMsg("");
+  const saveNotes = async () => {
+    setSaving(true);
     try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
-        method: "POST",
-        headers: {
-          "apikey": SUPABASE_KEY,
-          "Authorization": `Bearer ${SUPABASE_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email: inviteEmail, password: invitePassword, email_confirm: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.msg || "Failed to create user");
-      // update profile
-      await db.update("profiles", data.id, { role: inviteRole, full_name: inviteName });
-      setInviteMsg("✅ User created successfully!");
-      setInviteEmail(""); setInvitePassword(""); setInviteName(""); setInviteRole("member");
-      load();
-    } catch (e) {
-      setInviteMsg("⚠️ " + e.message);
-    } finally { setSaving(false); }
+      await db.update(type === "lead" ? "leads" : "jobs", item.id, { notes });
+      onUpdate({ ...item, notes });
+    } catch (e) { alert(e.message); }
+    finally { setSaving(false); }
   };
+
+  const tabs = ["details", "photos", "documents", "notes"];
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Admin Panel</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Manage your team members</p>
-        </div>
-        <button onClick={() => setShowInvite(true)}
-          className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors">
-          + Add User
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
-          <p className="text-xs text-amber-600 font-medium uppercase tracking-wide">Total Users</p>
-          <p className="text-2xl font-bold text-amber-700 mt-1">{users.length}</p>
-        </div>
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
-          <p className="text-xs text-blue-600 font-medium uppercase tracking-wide">Admins</p>
-          <p className="text-2xl font-bold text-blue-700 mt-1">{users.filter(u => u.role === "admin").length}</p>
-        </div>
-      </div>
-
-      {loading ? <Spinner /> : error ? <ErrorMsg msg={error} onRetry={load} /> : (
-        <div className="grid gap-3">
-          {users.map(user => (
-            <div key={user.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold flex-shrink-0">
-                {(user.full_name || user.email || "?")[0].toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900 truncate">{user.full_name || "—"}</p>
-                <p className="text-xs text-gray-400 truncate">{user.email}</p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {user.id === currentUser.id ? (
-                  <Badge label={user.role} />
-                ) : (
-                  <select value={user.role} onChange={e => updateRole(user.id, e.target.value)}
-                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-amber-400">
-                    <option value="member">member</option>
-                    <option value="admin">admin</option>
-                  </select>
-                )}
-                {user.id === currentUser.id && <span className="text-xs text-gray-400">(you)</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {showInvite && (
-        <Modal title="Add New User" onClose={() => { setShowInvite(false); setInviteMsg(""); }}>
-          {inviteMsg && (
-            <div className={`rounded-xl px-4 py-3 mb-4 text-sm ${inviteMsg.startsWith("✅") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
-              {inviteMsg}
-            </div>
-          )}
-          <Field label="Full Name" value={inviteName} onChange={setInviteName} />
-          <Field label="Email *" value={inviteEmail} onChange={setInviteEmail} type="email" />
-          <Field label="Password *" value={invitePassword} onChange={setInvitePassword} type="password" />
-          <Field label="Role" value={inviteRole} onChange={setInviteRole} options={["member", "admin"]} />
-          <button onClick={createUser} disabled={saving}
-            className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors">
-            {saving ? "Creating..." : "Create User"}
+    <Modal title={item.name || item.title} onClose={onClose} wide>
+      {/* Tabs */}
+      <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
+        {tabs.map(t => (
+          <button key={t} onClick={() => setActiveTab(t)}
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${activeTab === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            {t === "photos" ? "📸 Photos" : t === "documents" ? "📄 Docs" : t === "notes" ? "📝 Notes" : "ℹ️ Details"}
           </button>
-        </Modal>
+        ))}
+      </div>
+
+      {/* Details Tab */}
+      {activeTab === "details" && (
+        <div className="space-y-3">
+          {type === "lead" ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Email</p><p className="text-sm font-medium text-gray-800 truncate">{item.email || "—"}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Phone</p><p className="text-sm font-medium text-gray-800">{item.phone || "—"}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Source</p><p className="text-sm font-medium text-gray-800">{item.source || "—"}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Status</p><Badge label={item.status} /></div>
+              </div>
+              {item.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium text-gray-800">{item.address}</p></div>}
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Customer</p><p className="text-sm font-medium text-gray-800">{item.customer || "—"}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Type</p><p className="text-sm font-medium text-gray-800">{item.type || "—"}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Value</p><p className="text-sm font-medium text-gray-800">${Number(item.value || 0).toLocaleString()}</p></div>
+                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Status</p><Badge label={item.status} /></div>
+              </div>
+              {item.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium text-gray-800">{item.address}</p></div>}
+              {item.start_date && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Start Date</p><p className="text-sm font-medium text-gray-800">{item.start_date}</p></div>}
+            </>
+          )}
+        </div>
       )}
-    </div>
+
+      {/* Photos Tab */}
+      {activeTab === "photos" && (
+        <FilePanel relatedId={item.id} relatedType={`${type}-photos`} token={token} db={db} />
+      )}
+
+      {/* Documents Tab */}
+      {activeTab === "documents" && (
+        <FilePanel relatedId={item.id} relatedType={`${type}-docs`} token={token} db={db} />
+      )}
+
+      {/* Notes Tab */}
+      {activeTab === "notes" && (
+        <div>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={8}
+            placeholder="Add notes, comments, or activity..."
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none mb-3" />
+          <button onClick={saveNotes} disabled={saving}
+            className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">
+            {saving ? "Saving..." : "Save Notes"}
+          </button>
+        </div>
+      )}
+    </Modal>
   );
 }
 
 // ─── LEADS ───────────────────────────────────────────────────────────────────
 const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Lost"];
-function LeadsView({ db }) {
+function LeadsView({ db, token }) {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", source: "Referral", status: "New", notes: "" });
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
     try { setLeads(await db.list("leads")); }
-    catch (e) { setError(e.message); }
+    catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [db]);
   useEffect(() => { load(); }, [load]);
@@ -351,29 +396,34 @@ function LeadsView({ db }) {
       </div>
       <input placeholder="Search leads..." value={search} onChange={e => setSearch(e.target.value)}
         className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white shadow-sm mb-4" />
-      {loading ? <Spinner /> : error ? <ErrorMsg msg={error} onRetry={load} /> : (
+      {loading ? <Spinner /> : (
         <div className="grid gap-3">
           {filtered.length === 0 && <p className="text-center text-gray-400 py-12">No leads yet</p>}
           {filtered.map(lead => (
-            <div key={lead.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4 hover:shadow-md transition-shadow">
-              <div className="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-lg flex-shrink-0">{lead.name?.[0] || "?"}</div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-gray-900">{lead.name}</span><Badge label={lead.status} /><span className="text-xs text-gray-400 bg-gray-50 rounded px-2 py-0.5">{lead.source}</span></div>
-                <p className="text-sm text-gray-500 mt-0.5">{lead.email}{lead.phone ? ` · ${lead.phone}` : ""}</p>
-                {lead.address && <p className="text-sm text-gray-400 mt-0.5 truncate">{lead.address}</p>}
-                {lead.notes && <p className="text-xs text-gray-400 mt-1 italic">"{lead.notes}"</p>}
-              </div>
-              <div className="flex flex-col gap-2 flex-shrink-0 items-end">
-                <select value={lead.status} onChange={e => updateStatus(lead.id, e.target.value)}
-                  className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
-                  {LEAD_STATUSES.map(s => <option key={s}>{s}</option>)}
-                </select>
-                <button onClick={() => deleteLead(lead.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+            <div key={lead.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold flex-shrink-0">{lead.name?.[0] || "?"}</div>
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelected(lead)}>
+                  <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-gray-900">{lead.name}</span><Badge label={lead.status} /></div>
+                  <p className="text-sm text-gray-500 mt-0.5">{lead.email}{lead.phone ? ` · ${lead.phone}` : ""}</p>
+                  {lead.address && <p className="text-xs text-gray-400 mt-0.5 truncate">{lead.address}</p>}
+                </div>
+                <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
+                  <select value={lead.status} onChange={e => updateStatus(lead.id, e.target.value)}
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
+                    {LEAD_STATUSES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  <div className="flex gap-2">
+                    <button onClick={() => setSelected(lead)} className="text-xs text-blue-400 hover:text-blue-600">View</button>
+                    <button onClick={() => deleteLead(lead.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
       {showModal && (
         <Modal title="Add New Lead" onClose={() => setShowModal(false)}>
           <Field label="Full Name *" value={form.name} onChange={v => setForm({ ...form, name: v })} />
@@ -382,9 +432,15 @@ function LeadsView({ db }) {
           <Field label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} />
           <Field label="Source" value={form.source} onChange={v => setForm({ ...form, source: v })} options={["Referral", "Website", "Door Knock", "Social Media", "Other"]} />
           <Field label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })} options={LEAD_STATUSES} />
-          <Field label="Notes" value={form.notes} onChange={v => setForm({ ...form, notes: v })} />
+          <Field label="Notes" value={form.notes} onChange={v => setForm({ ...form, notes: v })} type="textarea" />
           <button onClick={addLead} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">{saving ? "Saving..." : "Save Lead"}</button>
         </Modal>
+      )}
+
+      {selected && (
+        <DetailModal item={selected} type="lead" token={token} db={db}
+          onClose={() => setSelected(null)}
+          onUpdate={updated => { setLeads(leads.map(l => l.id === updated.id ? updated : l)); setSelected(updated); }} />
       )}
     </div>
   );
@@ -392,19 +448,19 @@ function LeadsView({ db }) {
 
 // ─── JOBS ─────────────────────────────────────────────────────────────────────
 const JOB_STATUSES = ["Pending", "Scheduled", "In Progress", "Completed", "Cancelled"];
-function JobsView({ db }) {
+function JobsView({ db, token }) {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState("All");
-  const [form, setForm] = useState({ title: "", customer: "", address: "", status: "Pending", type: "Roofing", start_date: "", value: "" });
+  const [form, setForm] = useState({ title: "", customer: "", address: "", status: "Pending", type: "Roofing", start_date: "", value: "", notes: "" });
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
     try { setJobs(await db.list("jobs")); }
-    catch (e) { setError(e.message); }
+    catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [db]);
   useEffect(() => { load(); }, [load]);
@@ -418,7 +474,7 @@ function JobsView({ db }) {
     try {
       const [created] = await db.insert("jobs", { ...form, value: parseFloat(form.value) || 0 });
       setJobs([created, ...jobs]);
-      setForm({ title: "", customer: "", address: "", status: "Pending", type: "Roofing", start_date: "", value: "" });
+      setForm({ title: "", customer: "", address: "", status: "Pending", type: "Roofing", start_date: "", value: "", notes: "" });
       setShowModal(false);
     } catch (e) { alert("Error: " + e.message); }
     finally { setSaving(false); }
@@ -447,31 +503,34 @@ function JobsView({ db }) {
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === s ? "bg-amber-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-amber-400"}`}>{s}</button>
         ))}
       </div>
-      {loading ? <Spinner /> : error ? <ErrorMsg msg={error} onRetry={load} /> : (
+      {loading ? <Spinner /> : (
         <div className="grid gap-3">
           {filtered.length === 0 && <p className="text-center text-gray-400 py-12">No jobs yet</p>}
           {filtered.map(job => (
-            <div key={job.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <span className="text-2xl">{typeIcon[job.type] || "🔧"}</span>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-gray-900">{job.title}</span><Badge label={job.status} /></div>
-                    <p className="text-sm text-gray-500 mt-0.5">{job.customer}{job.address ? ` · ${job.address}` : ""}</p>
-                    <p className="text-sm text-gray-400 mt-0.5">{job.start_date ? `Start: ${job.start_date}` : ""}{job.type ? ` · ${job.type}` : ""}</p>
-                  </div>
+            <div key={job.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl flex-shrink-0">{typeIcon[job.type] || "🔧"}</span>
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelected(job)}>
+                  <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-gray-900">{job.title}</span><Badge label={job.status} /></div>
+                  <p className="text-sm text-gray-500 mt-0.5">{job.customer}{job.address ? ` · ${job.address}` : ""}</p>
+                  <p className="text-sm font-bold text-gray-900 mt-0.5">${Number(job.value || 0).toLocaleString()}</p>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-lg font-bold text-gray-900">${Number(job.value || 0).toLocaleString()}</p>
+                <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
                   <select value={job.status} onChange={e => updateStatus(job.id, e.target.value)}
-                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 mt-1 bg-white focus:outline-none">{JOB_STATUSES.map(s => <option key={s}>{s}</option>)}</select>
-                  <br /><button onClick={() => deleteJob(job.id)} className="text-xs text-red-400 hover:text-red-600 mt-1">Delete</button>
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
+                    {JOB_STATUSES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                  <div className="flex gap-2">
+                    <button onClick={() => setSelected(job)} className="text-xs text-blue-400 hover:text-blue-600">View</button>
+                    <button onClick={() => deleteJob(job.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                  </div>
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
       {showModal && (
         <Modal title="Add New Job" onClose={() => setShowModal(false)}>
           <Field label="Job Title *" value={form.title} onChange={v => setForm({ ...form, title: v })} />
@@ -481,8 +540,15 @@ function JobsView({ db }) {
           <Field label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })} options={JOB_STATUSES} />
           <Field label="Start Date" value={form.start_date} onChange={v => setForm({ ...form, start_date: v })} type="date" />
           <Field label="Contract Value ($)" value={form.value} onChange={v => setForm({ ...form, value: v })} type="number" />
+          <Field label="Notes" value={form.notes} onChange={v => setForm({ ...form, notes: v })} type="textarea" />
           <button onClick={addJob} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">{saving ? "Saving..." : "Save Job"}</button>
         </Modal>
+      )}
+
+      {selected && (
+        <DetailModal item={selected} type="job" token={token} db={db}
+          onClose={() => setSelected(null)}
+          onUpdate={updated => { setJobs(jobs.map(j => j.id === updated.id ? updated : j)); setSelected(updated); }} />
       )}
     </div>
   );
@@ -493,16 +559,15 @@ const EST_STATUSES = ["Draft", "Sent", "Approved", "Declined"];
 function EstimatesView({ db }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("Estimates");
   const [form, setForm] = useState({ number: "", customer: "", job: "", date: "", amount: "", status: "Draft", type: "Estimate" });
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
     try { setItems(await db.list("estimates")); }
-    catch (e) { setError(e.message); }
+    catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [db]);
   useEffect(() => { load(); }, [load]);
@@ -545,7 +610,7 @@ function EstimatesView({ db }) {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === t ? "bg-amber-500 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>{t}</button>
         ))}
       </div>
-      {loading ? <Spinner /> : error ? <ErrorMsg msg={error} onRetry={load} /> : (
+      {loading ? <Spinner /> : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead><tr className="border-b border-gray-100 bg-gray-50">
@@ -591,16 +656,15 @@ const TASK_PRIORITIES = ["Low", "Medium", "High"];
 function TasksView({ db }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState("Pending");
   const [form, setForm] = useState({ title: "", due: "", priority: "Medium", assigned: "", related: "", status: "Pending" });
 
   const load = useCallback(async () => {
-    setLoading(true); setError(null);
+    setLoading(true);
     try { setTasks(await db.list("tasks")); }
-    catch (e) { setError(e.message); }
+    catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [db]);
   useEffect(() => { load(); }, [load]);
@@ -647,7 +711,7 @@ function TasksView({ db }) {
           </button>
         ))}
       </div>
-      {loading ? <Spinner /> : error ? <ErrorMsg msg={error} onRetry={load} /> : (
+      {loading ? <Spinner /> : (
         <div className="grid gap-3">
           {filtered.length === 0 && <p className="text-center text-gray-400 py-12">No {filter.toLowerCase()} tasks</p>}
           {filtered.map(task => (
@@ -762,34 +826,167 @@ function Dashboard({ db, setTab }) {
   );
 }
 
-// ─── APP SHELL ────────────────────────────────────────────────────────────────
+// ─── ADMIN ────────────────────────────────────────────────────────────────────
+function AdminPanel({ db, currentUser }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [invitePassword, setInvitePassword] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteName, setInviteName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setUsers(await db.list("profiles", "select=*&order=created_at.desc")); }
+    catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [db]);
+  useEffect(() => { load(); }, [load]);
+
+  const updateRole = async (id, role) => {
+    setUsers(users.map(u => u.id === id ? { ...u, role } : u));
+    try { await db.update("profiles", id, { role }); } catch { load(); }
+  };
+
+  const createUser = async () => {
+    if (!inviteEmail || !invitePassword) return;
+    setSaving(true); setInviteMsg("");
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail, password: invitePassword, email_confirm: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.msg || "Failed to create user");
+      await db.update("profiles", data.id, { role: inviteRole, full_name: inviteName });
+      setInviteMsg("✅ User created!");
+      setInviteEmail(""); setInvitePassword(""); setInviteName(""); setInviteRole("member");
+      load();
+    } catch (e) { setInviteMsg("⚠️ " + e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div><h2 className="text-2xl font-bold text-gray-900">Admin Panel</h2><p className="text-sm text-gray-500 mt-0.5">Manage your team</p></div>
+        <button onClick={() => setShowInvite(true)} className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-xl text-sm">+ Add User</button>
+      </div>
+      {loading ? <Spinner /> : (
+        <div className="grid gap-3">
+          {users.map(user => (
+            <div key={user.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold flex-shrink-0">
+                {(user.full_name || user.email || "?")[0].toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-900 truncate">{user.full_name || "—"}</p>
+                <p className="text-xs text-gray-400 truncate">{user.email}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {user.id === currentUser.id ? <Badge label={user.role} /> : (
+                  <select value={user.role} onChange={e => updateRole(user.id, e.target.value)}
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
+                    <option value="member">member</option>
+                    <option value="admin">admin</option>
+                  </select>
+                )}
+                {user.id === currentUser.id && <span className="text-xs text-gray-400">(you)</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showInvite && (
+        <Modal title="Add New User" onClose={() => { setShowInvite(false); setInviteMsg(""); }}>
+          {inviteMsg && <div className={`rounded-xl px-4 py-3 mb-4 text-sm ${inviteMsg.startsWith("✅") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>{inviteMsg}</div>}
+          <Field label="Full Name" value={inviteName} onChange={setInviteName} />
+          <Field label="Email *" value={inviteEmail} onChange={setInviteEmail} type="email" />
+          <Field label="Password *" value={invitePassword} onChange={setInvitePassword} type="password" />
+          <Field label="Role" value={inviteRole} onChange={setInviteRole} options={["member", "admin"]} />
+          <button onClick={createUser} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">{saving ? "Creating..." : "Create User"}</button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleLogin = async () => {
+    if (!email || !password) { setError("Please enter email and password"); return; }
+    setLoading(true); setError("");
+    try {
+      const session = await signIn(email, password);
+      const profile = await getProfile(session.user.id, session.access_token);
+      onLogin({ session, profile });
+    } catch (e) { setError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg"><span className="text-white text-3xl">⚒</span></div>
+          <h1 className="text-3xl font-bold text-gray-900">BuildCRM</h1>
+          <p className="text-gray-500 mt-1 text-sm">Sign in to your account</p>
+        </div>
+        <div className="bg-white rounded-2xl shadow-xl p-6">
+          {error && <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-4 text-sm text-red-600">⚠️ {error}</div>}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+              onKeyDown={e => e.key === "Enter" && handleLogin()} />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+              onKeyDown={e => e.key === "Enter" && handleLogin()} />
+          </div>
+          <button onClick={handleLogin} disabled={loading}
+            className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md">
+            {loading ? "Signing in..." : "Sign In"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+const NAV = [
+  { id: "dashboard", label: "Dashboard", icon: "⊞" },
+  { id: "leads", label: "Leads", icon: "👥" },
+  { id: "jobs", label: "Jobs", icon: "🏗️" },
+  { id: "estimates", label: "Estimates", icon: "📄" },
+  { id: "tasks", label: "Tasks", icon: "✅" },
+];
+
 export default function App() {
-  const [auth, setAuth] = useState(null); // { session, profile }
+  const [auth, setAuth] = useState(null);
   const [tab, setTab] = useState("dashboard");
   const [showUserMenu, setShowUserMenu] = useState(false);
 
   const db = auth ? makeDb(auth.session.access_token) : null;
   const isAdmin = auth?.profile?.role === "admin";
+  const nav = [...NAV, ...(isAdmin ? [{ id: "admin", label: "Admin", icon: "⚙️" }] : [])];
 
-  const NAV = [
-    { id: "dashboard", label: "Dashboard", icon: "⊞" },
-    { id: "leads", label: "Leads", icon: "👥" },
-    { id: "jobs", label: "Jobs", icon: "🏗️" },
-    { id: "estimates", label: "Estimates", icon: "📄" },
-    { id: "tasks", label: "Tasks", icon: "✅" },
-    ...(isAdmin ? [{ id: "admin", label: "Admin", icon: "⚙️" }] : []),
-  ];
-
-  const handleLogin = ({ session, profile }) => {
-    setAuth({ session, profile });
-    setTab("dashboard");
-  };
-
+  const handleLogin = ({ session, profile }) => { setAuth({ session, profile }); setTab("dashboard"); };
   const handleLogout = async () => {
     try { await signOut(auth.session.access_token); } catch {}
-    setAuth(null);
-    setTab("dashboard");
-    setShowUserMenu(false);
+    setAuth(null); setTab("dashboard"); setShowUserMenu(false);
   };
 
   if (!auth) return <LoginScreen onLogin={handleLogin} />;
@@ -817,18 +1014,9 @@ export default function App() {
                 <div className="px-4 py-2 border-b border-gray-50">
                   <p className="text-sm font-semibold text-gray-800 truncate">{auth.profile?.full_name || "User"}</p>
                   <p className="text-xs text-gray-400 truncate">{auth.session.user.email}</p>
-                  <Badge label={auth.profile?.role || "member"} />
                 </div>
-                {isAdmin && (
-                  <button onClick={() => { setTab("admin"); setShowUserMenu(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 flex items-center gap-2">
-                    ⚙️ Admin Panel
-                  </button>
-                )}
-                <button onClick={handleLogout}
-                  className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2">
-                  🚪 Sign Out
-                </button>
+                {isAdmin && <button onClick={() => { setTab("admin"); setShowUserMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 flex items-center gap-2">⚙️ Admin Panel</button>}
+                <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2">🚪 Sign Out</button>
               </div>
             )}
           </div>
@@ -837,17 +1025,16 @@ export default function App() {
 
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
         {tab === "dashboard" && <Dashboard db={db} setTab={setTab} />}
-        {tab === "leads" && <LeadsView db={db} />}
-        {tab === "jobs" && <JobsView db={db} />}
+        {tab === "leads" && <LeadsView db={db} token={auth.session.access_token} />}
+        {tab === "jobs" && <JobsView db={db} token={auth.session.access_token} />}
         {tab === "estimates" && <EstimatesView db={db} />}
         {tab === "tasks" && <TasksView db={db} />}
         {tab === "admin" && isAdmin && <AdminPanel db={db} currentUser={auth.profile} />}
-        {tab === "admin" && !isAdmin && <p className="text-center text-gray-400 py-20">Access denied</p>}
       </main>
 
       <nav className="bg-white border-t border-gray-100 shadow-[0_-1px_8px_rgba(0,0,0,0.06)] sticky bottom-0 z-40">
         <div className="max-w-5xl mx-auto px-2 flex">
-          {NAV.map(n => (
+          {nav.map(n => (
             <button key={n.id} onClick={() => setTab(n.id)}
               className={`flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-colors ${tab === n.id ? "text-amber-500" : "text-gray-400 hover:text-gray-600"}`}>
               <span className="text-lg leading-none">{n.icon}</span>
@@ -857,7 +1044,6 @@ export default function App() {
           ))}
         </div>
       </nav>
-
       {showUserMenu && <div className="fixed inset-0 z-30" onClick={() => setShowUserMenu(false)} />}
     </div>
   );
