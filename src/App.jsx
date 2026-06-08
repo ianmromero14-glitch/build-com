@@ -1,11 +1,58 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import * as Sentry from "@sentry/react";
+
+// ─── SENTRY INIT ──────────────────────────────────────────────────────────────
+Sentry.init({
+  dsn: "https://16553aefa9b446bb357a046ad85f06f9@o4511527733755904.ingest.us.sentry.io/4511527740899328",
+  sendDefaultPii: true,
+  integrations: [Sentry.browserTracingIntegration()],
+  tracesSampleRate: 1.0,
+});
 
 const SUPABASE_URL = "https://zbvxrwftgtiwtlqzgztv.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpidnhyd2Z0Z3Rpd3RscXpnenR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NzU4NDgsImV4cCI6MjA5NjM1MTg0OH0.uuyQAAeJxtlf6FzjRMEUvdfTy5VD3j3mfy8G_lXx_ag";
+const RESEND_KEY = "re_N8yv9ks4_26JJGC57Z9pkVrXGidhmqsF9";
+const ADMIN_EMAIL = "ianmromero14@gmail.com";
+
+// ─── SEND EMAIL VIA RESEND ────────────────────────────────────────────────────
+async function sendRecommendationEmail(from_name, category, message) {
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: "Simplicity CRM <onboarding@resend.dev>",
+        to: [ADMIN_EMAIL],
+        subject: `💡 New Recommendation: ${category}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
+            <div style="background: #1C1F22; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+              <h1 style="color: white; margin: 0; font-size: 22px; letter-spacing: 2px;">SIMPLICITY</h1>
+              <p style="color: #6B7280; margin: 4px 0 0; font-size: 13px;">CRM</p>
+            </div>
+            <h2 style="color: #111827; margin-bottom: 8px;">New Recommendation Submitted</h2>
+            <p style="color: #6B7280; margin-bottom: 24px; font-size: 14px;">A team member has submitted a new recommendation.</p>
+            <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+              <p style="margin: 0 0 8px; color: #6B7280; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">From</p>
+              <p style="margin: 0 0 16px; color: #111827; font-weight: 600;">${from_name}</p>
+              <p style="margin: 0 0 8px; color: #6B7280; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Category</p>
+              <p style="margin: 0 0 16px;"><span style="background: #1C1F22; color: white; padding: 4px 12px; border-radius: 20px; font-size: 13px;">${category}</span></p>
+              <p style="margin: 0 0 8px; color: #6B7280; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Message</p>
+              <p style="margin: 0; color: #111827; line-height: 1.6;">${message}</p>
+            </div>
+            <p style="color: #9CA3AF; font-size: 12px; text-align: center; margin-top: 24px;">Simplicity CRM · Sent automatically</p>
+          </div>
+        `,
+      }),
+    });
+  } catch (e) {
+    Sentry.captureException(e);
+    console.error("Email send failed:", e);
+  }
+}
 
 // ─── STAR TETRAHEDRON LOGO ────────────────────────────────────────────────────
-function TetrahedronMark({ size = 32 }) {
-  const s = size / 32;
+function TetrahedronMark({ size = 36 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <rect width="64" height="64" rx="12" fill="#1C1F22"/>
@@ -139,6 +186,9 @@ const statusColors = {
   Done: "bg-green-100 text-green-700", High: "bg-red-100 text-red-700",
   Medium: "bg-yellow-100 text-yellow-700", Low: "bg-gray-100 text-gray-600",
   admin: "bg-gray-700 text-gray-100", member: "bg-gray-100 text-gray-600",
+  "Under Review": "bg-yellow-100 text-yellow-700",
+  Implemented: "bg-green-100 text-green-700",
+  Dismissed: "bg-red-100 text-red-600",
 };
 const priorityDot = { High: "bg-red-500", Medium: "bg-yellow-400", Low: "bg-gray-400" };
 
@@ -195,7 +245,7 @@ function FilePanel({ relatedId, relatedType, token, db }) {
   const loadFiles = useCallback(async () => {
     setLoading(true);
     try { setFiles(await db.list("files", `select=*&related_id=eq.${relatedId}&order=created_at.desc`)); }
-    catch (e) { console.error(e); }
+    catch (e) { Sentry.captureException(e); }
     finally { setLoading(false); }
   }, [db, relatedId]);
 
@@ -208,14 +258,14 @@ function FilePanel({ relatedId, relatedType, token, db }) {
     try {
       for (const file of selected) await uploadFile(token, file, relatedId, relatedType, db);
       await loadFiles();
-    } catch (err) { alert("Upload failed: " + err.message); }
+    } catch (err) { Sentry.captureException(err); alert("Upload failed: " + err.message); }
     finally { setUploading(false); }
   };
 
   const deleteFile = async (file) => {
     if (!confirm("Delete this file?")) return;
     try { await db.delete("files", file.id); setFiles(files.filter(f => f.id !== file.id)); }
-    catch (e) { alert("Delete failed: " + e.message); }
+    catch (e) { Sentry.captureException(e); alert("Delete failed: " + e.message); }
   };
 
   const isImage = (f) => f.type?.startsWith("image/");
@@ -225,8 +275,7 @@ function FilePanel({ relatedId, relatedType, token, db }) {
   return (
     <div>
       <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => fileRef.current.click()} disabled={uploading}
-          className={`${btnSm} flex items-center gap-2`}>
+        <button onClick={() => fileRef.current.click()} disabled={uploading} className={`${btnSm} flex items-center gap-2`}>
           {uploading ? "Uploading..." : "📎 Upload Files"}
         </button>
         <span className="text-xs text-gray-400">Photos, PDFs, contracts...</span>
@@ -302,7 +351,7 @@ function DetailModal({ item, type, token, db, onClose, onUpdate }) {
     try {
       await db.update(type === "lead" ? "leads" : "jobs", item.id, { notes });
       onUpdate({ ...item, notes });
-    } catch (e) { alert(e.message); }
+    } catch (e) { Sentry.captureException(e); alert(e.message); }
     finally { setSaving(false); }
   };
 
@@ -349,12 +398,155 @@ function DetailModal({ item, type, token, db, onClose, onUpdate }) {
         <div>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={8} placeholder="Add notes, comments, or activity..."
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none mb-3" />
-          <button onClick={saveNotes} disabled={saving} className={`w-full ${btnPrimary}`}>
-            {saving ? "Saving..." : "Save Notes"}
-          </button>
+          <button onClick={saveNotes} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Saving..." : "Save Notes"}</button>
         </div>
       )}
     </Modal>
+  );
+}
+
+// ─── RECOMMENDATIONS ──────────────────────────────────────────────────────────
+const REC_CATEGORIES = ["Feature Request", "Bug Report", "Process Improvement", "UI Feedback", "Other"];
+const REC_STATUSES = ["Pending", "Under Review", "Implemented", "Dismissed"];
+
+function RecommendationsView({ db, profile }) {
+  const [recs, setRecs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [filter, setFilter] = useState("All");
+  const isAdmin = profile?.role === "admin";
+  const [form, setForm] = useState({ title: "", category: "Feature Request", message: "", status: "Pending" });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setRecs(await db.list("recommendations")); }
+    catch (e) { Sentry.captureException(e); console.error(e); }
+    finally { setLoading(false); }
+  }, [db]);
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = filter === "All" ? recs : recs.filter(r => r.status === filter);
+
+  const submit = async () => {
+    if (!form.title || !form.message) return;
+    setSaving(true);
+    try {
+      const payload = { ...form, submitted_by: profile?.full_name || profile?.email || "Team Member" };
+      await db.insert("recommendations", payload);
+      await sendRecommendationEmail(payload.submitted_by, form.category, `${form.title}\n\n${form.message}`);
+      setForm({ title: "", category: "Feature Request", message: "", status: "Pending" });
+      setShowModal(false);
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 4000);
+      load();
+    } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
+    finally { setSaving(false); }
+  };
+
+  const updateStatus = async (id, status) => {
+    setRecs(recs.map(r => r.id === id ? { ...r, status } : r));
+    try { await db.update("recommendations", id, { status }); } catch (e) { Sentry.captureException(e); load(); }
+  };
+
+  const deleteRec = async (id) => {
+    if (!confirm("Delete this recommendation?")) return;
+    setRecs(recs.filter(r => r.id !== id));
+    try { await db.delete("recommendations", id); } catch (e) { Sentry.captureException(e); load(); }
+  };
+
+  const catIcon = { "Feature Request": "💡", "Bug Report": "🐛", "Process Improvement": "⚙️", "UI Feedback": "🎨", "Other": "📝" };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Recommendations</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Share ideas, feedback, or report issues</p>
+        </div>
+        <button onClick={() => setShowModal(true)} className={btnSm}>+ Submit</button>
+      </div>
+
+      {submitted && (
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-4 mb-4 flex items-center gap-3">
+          <span className="text-2xl">✅</span>
+          <div>
+            <p className="text-sm font-semibold text-green-800">Recommendation submitted!</p>
+            <p className="text-xs text-green-600">Ian has been notified by email.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Info banner for members -->*/}
+      {!isAdmin && (
+        <div className="bg-gray-800 rounded-2xl p-4 mb-5">
+          <p className="text-sm text-white font-medium">💡 Have an idea or found a bug?</p>
+          <p className="text-xs text-gray-400 mt-0.5">Submit a recommendation and Ian will be notified immediately by email.</p>
+        </div>
+      )}
+
+      {/* Filter tabs - admin only */}
+      {isAdmin && (
+        <div className="flex gap-2 mb-5 flex-wrap">
+          {["All", ...REC_STATUSES].map(s => (
+            <button key={s} onClick={() => setFilter(s)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === s ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-gray-400"}`}>{s}</button>
+          ))}
+        </div>
+      )}
+
+      {loading ? <Spinner /> : (
+        <div className="grid gap-3">
+          {filtered.length === 0 && <p className="text-center text-gray-400 py-12">No recommendations yet</p>}
+          {filtered.map(rec => (
+            <div key={rec.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl flex-shrink-0">{catIcon[rec.category] || "📝"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-semibold text-gray-900">{rec.title}</span>
+                    <Badge label={rec.status} />
+                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{rec.category}</span>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1 leading-relaxed">{rec.message}</p>
+                  <p className="text-xs text-gray-400 mt-2">Submitted by {rec.submitted_by} · {new Date(rec.created_at).toLocaleDateString()}</p>
+                </div>
+                {isAdmin && (
+                  <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
+                    <select value={rec.status} onChange={e => updateStatus(rec.id, e.target.value)}
+                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
+                      {REC_STATUSES.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                    <button onClick={() => deleteRec(rec.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showModal && (
+        <Modal title="Submit a Recommendation" onClose={() => setShowModal(false)}>
+          <div className="bg-gray-50 rounded-xl p-3 mb-4 text-xs text-gray-500">
+            📧 Ian will be notified by email when you submit. Be specific so we can act on it!
+          </div>
+          <Field label="Title *" value={form.title} onChange={v => setForm({ ...form, title: v })} />
+          <Field label="Category" value={form.category} onChange={v => setForm({ ...form, category: v })} options={REC_CATEGORIES} />
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Details *</label>
+            <textarea value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} rows={5}
+              placeholder="Describe your idea, issue, or feedback in detail..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none" />
+          </div>
+          <button onClick={submit} disabled={saving || !form.title || !form.message}
+            className={`w-full ${btnPrimary}`}>
+            {saving ? "Submitting..." : "Submit Recommendation"}
+          </button>
+        </Modal>
+      )}
+    </div>
   );
 }
 
@@ -376,7 +568,7 @@ function LeadsView({ db, token, profile }) {
     try {
       const [leadsData, members] = await Promise.all([db.list("leads"), db.list("profiles", "select=*&order=full_name.asc")]);
       setLeads(leadsData); setTeamMembers(members);
-    } catch (e) { console.error(e); }
+    } catch (e) { Sentry.captureException(e); }
     finally { setLoading(false); }
   }, [db]);
   useEffect(() => { load(); }, [load]);
@@ -396,7 +588,7 @@ function LeadsView({ db, token, profile }) {
       setLeads([created, ...leads]);
       setForm({ name: "", phone: "", email: "", address: "", source: "Referral", status: "New", notes: "", assigned_to: "", assigned_name: "" });
       setShowModal(false);
-    } catch (e) { alert("Error: " + e.message); }
+    } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
@@ -404,18 +596,18 @@ function LeadsView({ db, token, profile }) {
     const member = teamMembers.find(m => m.id === memberId);
     const update = { assigned_to: memberId || null, assigned_name: member?.full_name || member?.email || null };
     setLeads(leads.map(l => l.id === lead.id ? { ...l, ...update } : l));
-    try { await db.update("leads", lead.id, update); } catch { load(); }
+    try { await db.update("leads", lead.id, update); } catch (e) { Sentry.captureException(e); load(); }
   };
 
   const updateStatus = async (id, status) => {
     setLeads(leads.map(l => l.id === id ? { ...l, status } : l));
-    try { await db.update("leads", id, { status }); } catch { load(); }
+    try { await db.update("leads", id, { status }); } catch (e) { Sentry.captureException(e); load(); }
   };
 
   const deleteLead = async (id) => {
     if (!confirm("Delete this lead?")) return;
     setLeads(leads.filter(l => l.id !== id));
-    try { await db.delete("leads", id); } catch { load(); }
+    try { await db.delete("leads", id); } catch (e) { Sentry.captureException(e); load(); }
   };
 
   return (
@@ -508,7 +700,7 @@ function JobsView({ db, token }) {
   const load = useCallback(async () => {
     setLoading(true);
     try { setJobs(await db.list("jobs")); }
-    catch (e) { console.error(e); }
+    catch (e) { Sentry.captureException(e); }
     finally { setLoading(false); }
   }, [db]);
   useEffect(() => { load(); }, [load]);
@@ -524,19 +716,19 @@ function JobsView({ db, token }) {
       setJobs([created, ...jobs]);
       setForm({ title: "", customer: "", address: "", status: "Pending", type: "Roofing", start_date: "", value: "", notes: "" });
       setShowModal(false);
-    } catch (e) { alert("Error: " + e.message); }
+    } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
   const updateStatus = async (id, status) => {
     setJobs(jobs.map(j => j.id === id ? { ...j, status } : j));
-    try { await db.update("jobs", id, { status }); } catch { load(); }
+    try { await db.update("jobs", id, { status }); } catch (e) { Sentry.captureException(e); load(); }
   };
 
   const deleteJob = async (id) => {
     if (!confirm("Delete this job?")) return;
     setJobs(jobs.filter(j => j.id !== id));
-    try { await db.delete("jobs", id); } catch { load(); }
+    try { await db.delete("jobs", id); } catch (e) { Sentry.captureException(e); load(); }
   };
 
   return (
@@ -613,7 +805,7 @@ function EstimatesView({ db }) {
   const load = useCallback(async () => {
     setLoading(true);
     try { setItems(await db.list("estimates")); }
-    catch (e) { console.error(e); }
+    catch (e) { Sentry.captureException(e); }
     finally { setLoading(false); }
   }, [db]);
   useEffect(() => { load(); }, [load]);
@@ -630,14 +822,14 @@ function EstimatesView({ db }) {
       setItems([created, ...items]);
       setForm({ number: "", customer: "", job: "", date: "", amount: "", status: "Draft", type: form.type });
       setShowModal(false);
-    } catch (e) { alert("Error: " + e.message); }
+    } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
   const deleteItem = async (id) => {
     if (!confirm("Delete?")) return;
     setItems(items.filter(i => i.id !== id));
-    try { await db.delete("estimates", id); } catch { load(); }
+    try { await db.delete("estimates", id); } catch (e) { Sentry.captureException(e); load(); }
   };
 
   return (
@@ -710,7 +902,7 @@ function TasksView({ db }) {
   const load = useCallback(async () => {
     setLoading(true);
     try { setTasks(await db.list("tasks")); }
-    catch (e) { console.error(e); }
+    catch (e) { Sentry.captureException(e); }
     finally { setLoading(false); }
   }, [db]);
   useEffect(() => { load(); }, [load]);
@@ -727,20 +919,20 @@ function TasksView({ db }) {
       setTasks([created, ...tasks]);
       setForm({ title: "", due: "", priority: "Medium", assigned: "", related: "", status: "Pending" });
       setShowModal(false);
-    } catch (e) { alert("Error: " + e.message); }
+    } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
   const toggleDone = async (task) => {
     const newStatus = task.status === "Done" ? "Pending" : "Done";
     setTasks(tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
-    try { await db.update("tasks", task.id, { status: newStatus }); } catch { load(); }
+    try { await db.update("tasks", task.id, { status: newStatus }); } catch (e) { Sentry.captureException(e); load(); }
   };
 
   const deleteTask = async (id) => {
     if (!confirm("Delete this task?")) return;
     setTasks(tasks.filter(t => t.id !== id));
-    try { await db.delete("tasks", id); } catch { load(); }
+    try { await db.delete("tasks", id); } catch (e) { Sentry.captureException(e); load(); }
   };
 
   return (
@@ -812,7 +1004,7 @@ function Dashboard({ db, setTab }) {
         setStats({ leads: leads.length, jobs: jobs.length, pipeline: jobs.reduce((s, j) => s + Number(j.value || 0), 0), tasks: tasks.filter(t => t.status === "Pending").length });
         setRecentJobs(jobs.slice(0, 3));
         setUpcomingTasks(tasks.filter(t => t.status === "Pending").slice(0, 4));
-      } catch (e) { console.error(e); }
+      } catch (e) { Sentry.captureException(e); }
       finally { setLoading(false); }
     }
     load();
@@ -887,14 +1079,14 @@ function AdminPanel({ db, currentUser }) {
   const load = useCallback(async () => {
     setLoading(true);
     try { setUsers(await db.list("profiles", "select=*&order=created_at.desc")); }
-    catch (e) { console.error(e); }
+    catch (e) { Sentry.captureException(e); }
     finally { setLoading(false); }
   }, [db]);
   useEffect(() => { load(); }, [load]);
 
   const updateRole = async (id, role) => {
     setUsers(users.map(u => u.id === id ? { ...u, role } : u));
-    try { await db.update("profiles", id, { role }); } catch { load(); }
+    try { await db.update("profiles", id, { role }); } catch (e) { Sentry.captureException(e); load(); }
   };
 
   const createUser = async () => {
@@ -912,7 +1104,7 @@ function AdminPanel({ db, currentUser }) {
       setInviteMsg("✅ User created!");
       setInviteEmail(""); setInvitePassword(""); setInviteName(""); setInviteRole("member");
       load();
-    } catch (e) { setInviteMsg("⚠️ " + e.message); }
+    } catch (e) { Sentry.captureException(e); setInviteMsg("⚠️ " + e.message); }
     finally { setSaving(false); }
   };
 
@@ -979,13 +1171,12 @@ function LoginScreen({ onLogin }) {
       const session = await signIn(email, password);
       const profile = await getProfile(session.user.id, session.access_token);
       onLogin({ session, profile });
-    } catch (e) { setError(e.message); }
+    } catch (e) { Sentry.captureException(e); setError(e.message); }
     finally { setLoading(false); }
   };
 
   return (
     <div className="min-h-screen flex" style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
-      {/* Left panel */}
       <div className="hidden md:flex flex-col justify-between w-1/2 bg-gray-900 p-12">
         <TetrahedronLogin />
         <div>
@@ -993,12 +1184,9 @@ function LoginScreen({ onLogin }) {
           <p className="text-gray-600 text-xs mt-2">— Simplicity CRM</p>
         </div>
       </div>
-      {/* Right panel */}
       <div className="flex-1 flex items-center justify-center px-6 bg-gray-50">
         <div className="w-full max-w-sm">
-          <div className="flex justify-center mb-8 md:hidden">
-            <TetrahedronLogin />
-          </div>
+          <div className="flex justify-center mb-8 md:hidden"><TetrahedronLogin /></div>
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h1>
           <p className="text-gray-500 text-sm mb-8">Sign in to your Simplicity account</p>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -1015,8 +1203,7 @@ function LoginScreen({ onLogin }) {
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
                 onKeyDown={e => e.key === "Enter" && handleLogin()} />
             </div>
-            <button onClick={handleLogin} disabled={loading}
-              className={`w-full ${btnPrimary}`}>
+            <button onClick={handleLogin} disabled={loading} className={`w-full ${btnPrimary}`}>
               {loading ? "Signing in..." : "Sign In"}
             </button>
           </div>
@@ -1033,6 +1220,7 @@ const NAV = [
   { id: "jobs", label: "Jobs", icon: "🏗️" },
   { id: "estimates", label: "Estimates", icon: "📄" },
   { id: "tasks", label: "Tasks", icon: "✅" },
+  { id: "recs", label: "Ideas", icon: "💡" },
 ];
 
 export default function App() {
@@ -1044,65 +1232,82 @@ export default function App() {
   const isAdmin = auth?.profile?.role === "admin";
   const nav = [...NAV, ...(isAdmin ? [{ id: "admin", label: "Admin", icon: "⚙️" }] : [])];
 
-  const handleLogin = ({ session, profile }) => { setAuth({ session, profile }); setTab("dashboard"); };
+  const handleLogin = ({ session, profile }) => {
+    Sentry.setUser({ email: session.user.email, id: session.user.id });
+    setAuth({ session, profile });
+    setTab("dashboard");
+  };
   const handleLogout = async () => {
     try { await signOut(auth.session.access_token); } catch {}
+    Sentry.setUser(null);
     setAuth(null); setTab("dashboard"); setShowUserMenu(false);
   };
 
   if (!auth) return <LoginScreen onLogin={handleLogin} />;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col" style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
-      <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <TetrahedronMark size={36} />
-          <div className="relative">
-            <button onClick={() => setShowUserMenu(!showUserMenu)} className="flex items-center gap-2">
-              <div className="text-right hidden sm:block">
-                <p className="text-xs font-semibold text-gray-200">{auth.profile?.full_name || auth.session.user.email}</p>
-                <p className="text-xs text-gray-500 capitalize">{auth.profile?.role || "member"}</p>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-gray-200 font-bold text-sm">
-                {(auth.profile?.full_name || auth.session.user.email || "?")[0].toUpperCase()}
-              </div>
-            </button>
-            {showUserMenu && (
-              <div className="absolute right-0 top-10 bg-white border border-gray-100 rounded-2xl shadow-xl py-2 w-48 z-50">
-                <div className="px-4 py-2 border-b border-gray-50">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{auth.profile?.full_name || "User"}</p>
-                  <p className="text-xs text-gray-400 truncate">{auth.session.user.email}</p>
+    <Sentry.ErrorBoundary fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+        <div className="text-center">
+          <p className="text-4xl mb-4">⚠️</p>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Something went wrong</h2>
+          <p className="text-gray-500 text-sm mb-4">This error has been reported automatically.</p>
+          <button onClick={() => window.location.reload()} className={btnSm}>Reload App</button>
+        </div>
+      </div>
+    }>
+      <div className="min-h-screen bg-gray-50 flex flex-col" style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+        <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-40">
+          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+            <TetrahedronMark size={36} />
+            <div className="relative">
+              <button onClick={() => setShowUserMenu(!showUserMenu)} className="flex items-center gap-2">
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs font-semibold text-gray-200">{auth.profile?.full_name || auth.session.user.email}</p>
+                  <p className="text-xs text-gray-500 capitalize">{auth.profile?.role || "member"}</p>
                 </div>
-                {isAdmin && <button onClick={() => { setTab("admin"); setShowUserMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">⚙️ Admin Panel</button>}
-                <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2">🚪 Sign Out</button>
-              </div>
-            )}
+                <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-gray-200 font-bold text-sm">
+                  {(auth.profile?.full_name || auth.session.user.email || "?")[0].toUpperCase()}
+                </div>
+              </button>
+              {showUserMenu && (
+                <div className="absolute right-0 top-10 bg-white border border-gray-100 rounded-2xl shadow-xl py-2 w-48 z-50">
+                  <div className="px-4 py-2 border-b border-gray-50">
+                    <p className="text-sm font-semibold text-gray-800 truncate">{auth.profile?.full_name || "User"}</p>
+                    <p className="text-xs text-gray-400 truncate">{auth.session.user.email}</p>
+                  </div>
+                  {isAdmin && <button onClick={() => { setTab("admin"); setShowUserMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">⚙️ Admin Panel</button>}
+                  <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2">🚪 Sign Out</button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
-        {tab === "dashboard" && <Dashboard db={db} setTab={setTab} />}
-        {tab === "leads" && <LeadsView db={db} token={auth.session.access_token} profile={auth.profile} />}
-        {tab === "jobs" && <JobsView db={db} token={auth.session.access_token} />}
-        {tab === "estimates" && <EstimatesView db={db} />}
-        {tab === "tasks" && <TasksView db={db} />}
-        {tab === "admin" && isAdmin && <AdminPanel db={db} currentUser={auth.profile} />}
-      </main>
+        <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-6">
+          {tab === "dashboard" && <Dashboard db={db} setTab={setTab} />}
+          {tab === "leads" && <LeadsView db={db} token={auth.session.access_token} profile={auth.profile} />}
+          {tab === "jobs" && <JobsView db={db} token={auth.session.access_token} />}
+          {tab === "estimates" && <EstimatesView db={db} />}
+          {tab === "tasks" && <TasksView db={db} />}
+          {tab === "recs" && <RecommendationsView db={db} profile={auth.profile} />}
+          {tab === "admin" && isAdmin && <AdminPanel db={db} currentUser={auth.profile} />}
+        </main>
 
-      <nav className="bg-gray-900 border-t border-gray-800 sticky bottom-0 z-40">
-        <div className="max-w-5xl mx-auto px-2 flex">
-          {nav.map(n => (
-            <button key={n.id} onClick={() => setTab(n.id)}
-              className={`flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-colors ${tab === n.id ? "text-white" : "text-gray-600 hover:text-gray-400"}`}>
-              <span className="text-lg leading-none">{n.icon}</span>
-              <span className="text-[10px] font-semibold tracking-wide">{n.label}</span>
-              {tab === n.id && <span className="w-4 h-0.5 bg-white rounded-full mt-0.5"></span>}
-            </button>
-          ))}
-        </div>
-      </nav>
-      {showUserMenu && <div className="fixed inset-0 z-30" onClick={() => setShowUserMenu(false)} />}
-    </div>
+        <nav className="bg-gray-900 border-t border-gray-800 sticky bottom-0 z-40">
+          <div className="max-w-5xl mx-auto px-2 flex">
+            {nav.map(n => (
+              <button key={n.id} onClick={() => setTab(n.id)}
+                className={`flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-colors ${tab === n.id ? "text-white" : "text-gray-600 hover:text-gray-400"}`}>
+                <span className="text-lg leading-none">{n.icon}</span>
+                <span className="text-[10px] font-semibold tracking-wide">{n.label}</span>
+                {tab === n.id && <span className="w-4 h-0.5 bg-white rounded-full mt-0.5"></span>}
+              </button>
+            ))}
+          </div>
+        </nav>
+        {showUserMenu && <div className="fixed inset-0 z-30" onClick={() => setShowUserMenu(false)} />}
+      </div>
+    </Sentry.ErrorBoundary>
   );
 }
