@@ -3,6 +3,66 @@ import { useState, useEffect, useCallback, useRef } from "react";
 const SUPABASE_URL = "https://zbvxrwftgtiwtlqzgztv.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpidnhyd2Z0Z3Rpd3RscXpnenR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NzU4NDgsImV4cCI6MjA5NjM1MTg0OH0.uuyQAAeJxtlf6FzjRMEUvdfTy5VD3j3mfy8G_lXx_ag";
 
+// ─── STAR TETRAHEDRON LOGO ────────────────────────────────────────────────────
+function TetrahedronMark({ size = 32 }) {
+  const s = size / 32;
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
+      <rect width="64" height="64" rx="12" fill="#1C1F22"/>
+      <g transform="translate(20, 32)">
+        <polygon points="0,-22 -16,-4 16,-4" fill="#4B5563"/>
+        <polygon points="0,-22 -16,-4 0,-4" fill="#374151"/>
+        <polygon points="0,-22 16,-4 0,-4" fill="#6B7280"/>
+        <line x1="0" y1="-22" x2="0" y2="-4" stroke="#9CA3AF" strokeWidth="1"/>
+        <polygon points="0,22 -16,4 16,4" fill="#4B5563"/>
+        <polygon points="0,22 -16,4 0,4" fill="#374151"/>
+        <polygon points="0,22 16,4 0,4" fill="#6B7280"/>
+        <line x1="0" y1="22" x2="0" y2="4" stroke="#9CA3AF" strokeWidth="1"/>
+        <polygon points="-16,-4 -26,0 -16,4" fill="#4B5563"/>
+        <polygon points="16,-4 24,0 16,4" fill="#4B5563"/>
+        <polygon points="-10,-14 -20,-20 -4,-8" fill="#6B7280"/>
+        <polygon points="10,-14 20,-20 4,-8" fill="#9CA3AF"/>
+        <polygon points="-10,14 -20,20 -4,8" fill="#6B7280"/>
+        <polygon points="10,14 20,20 4,8" fill="#9CA3AF"/>
+        <polygon points="0,-4 -6,-2 -6,2 0,4 6,2 6,-2" fill="#D1D5DB"/>
+        <circle cx="0" cy="0" r="2.5" fill="white"/>
+      </g>
+      <text x="38" y="28" fontFamily="'DM Sans',Arial,sans-serif" fontSize="11" fontWeight="700" fill="white" textAnchor="start" letterSpacing="1">SIMP</text>
+      <text x="38" y="42" fontFamily="'DM Sans',Arial,sans-serif" fontSize="11" fontWeight="700" fill="#6B7280" textAnchor="start" letterSpacing="1">LICITY</text>
+      <line x1="38" y1="31" x2="62" y2="31" stroke="#374151" strokeWidth="0.8"/>
+    </svg>
+  );
+}
+
+function TetrahedronLogin() {
+  return (
+    <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+      <rect width="120" height="120" rx="24" fill="#1C1F22"/>
+      <g transform="translate(42, 60)">
+        <polygon points="0,-38 -28,-6 28,-6" fill="#4B5563"/>
+        <polygon points="0,-38 -28,-6 0,-6" fill="#374151"/>
+        <polygon points="0,-38 28,-6 0,-6" fill="#6B7280"/>
+        <line x1="0" y1="-38" x2="0" y2="-6" stroke="#9CA3AF" strokeWidth="1.5"/>
+        <polygon points="0,38 -28,6 28,6" fill="#4B5563"/>
+        <polygon points="0,38 -28,6 0,6" fill="#374151"/>
+        <polygon points="0,38 28,6 0,6" fill="#6B7280"/>
+        <line x1="0" y1="38" x2="0" y2="6" stroke="#9CA3AF" strokeWidth="1.5"/>
+        <polygon points="-28,-6 -44,0 -28,6" fill="#4B5563"/>
+        <polygon points="28,-6 42,0 28,6" fill="#4B5563"/>
+        <polygon points="-18,-22 -36,-34 -6,-12" fill="#6B7280"/>
+        <polygon points="18,-22 36,-34 6,-12" fill="#9CA3AF"/>
+        <polygon points="-18,22 -36,34 -6,12" fill="#6B7280"/>
+        <polygon points="18,22 36,34 6,12" fill="#9CA3AF"/>
+        <polygon points="0,-6 -10,-3 -10,3 0,6 10,3 10,-3" fill="#D1D5DB"/>
+        <circle cx="0" cy="0" r="4" fill="white"/>
+      </g>
+      <text x="68" y="52" fontFamily="'DM Sans',Arial,sans-serif" fontSize="18" fontWeight="700" fill="white" textAnchor="start" letterSpacing="2">SIMP</text>
+      <text x="68" y="74" fontFamily="'DM Sans',Arial,sans-serif" fontSize="18" fontWeight="700" fill="#6B7280" textAnchor="start" letterSpacing="2">LICITY</text>
+      <line x1="68" y1="56" x2="114" y2="56" stroke="#374151" strokeWidth="1"/>
+    </svg>
+  );
+}
+
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
 async function signIn(email, password) {
   const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
@@ -78,7 +138,7 @@ const statusColors = {
   Declined: "bg-red-100 text-red-700", Paid: "bg-emerald-100 text-emerald-700",
   Done: "bg-green-100 text-green-700", High: "bg-red-100 text-red-700",
   Medium: "bg-yellow-100 text-yellow-700", Low: "bg-gray-100 text-gray-600",
-  admin: "bg-amber-100 text-amber-700", member: "bg-gray-100 text-gray-600",
+  admin: "bg-gray-700 text-gray-100", member: "bg-gray-100 text-gray-600",
 };
 const priorityDot = { High: "bg-red-500", Medium: "bg-yellow-400", Low: "bg-gray-400" };
 
@@ -86,14 +146,14 @@ function Badge({ label }) {
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusColors[label] || "bg-gray-100 text-gray-600"}`}>{label}</span>;
 }
 function Spinner() {
-  return <div className="flex items-center justify-center py-16"><div className="w-8 h-8 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin"></div></div>;
+  return <div className="flex items-center justify-center py-16"><div className="w-8 h-8 border-4 border-gray-200 border-t-gray-600 rounded-full animate-spin"></div></div>;
 }
 function Modal({ title, onClose, children, wide }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className={`bg-white rounded-2xl shadow-2xl w-full ${wide ? "max-w-3xl" : "max-w-lg"} overflow-hidden max-h-[90vh] flex flex-col`}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+          <h3 className="text-base font-bold text-gray-900">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-5 overflow-y-auto">{children}</div>
@@ -107,19 +167,22 @@ function Field({ label, value, onChange, type = "text", options, disabled }) {
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       {options ? (
         <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white disabled:opacity-50">
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white disabled:opacity-50">
           {options.map(o => <option key={o}>{o}</option>)}
         </select>
       ) : type === "textarea" ? (
         <textarea value={value} onChange={e => onChange(e.target.value)} rows={3}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none" />
       ) : (
         <input type={type} value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50" />
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:opacity-50" />
       )}
     </div>
   );
 }
+
+const btnPrimary = "bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors";
+const btnSm = "bg-gray-800 hover:bg-gray-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors";
 
 // ─── FILE PANEL ───────────────────────────────────────────────────────────────
 function FilePanel({ relatedId, relatedType, token, db }) {
@@ -163,7 +226,7 @@ function FilePanel({ relatedId, relatedType, token, db }) {
     <div>
       <div className="flex items-center gap-3 mb-5">
         <button onClick={() => fileRef.current.click()} disabled={uploading}
-          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-xl text-sm flex items-center gap-2">
+          className={`${btnSm} flex items-center gap-2`}>
           {uploading ? "Uploading..." : "📎 Upload Files"}
         </button>
         <span className="text-xs text-gray-400">Photos, PDFs, contracts...</span>
@@ -195,7 +258,7 @@ function FilePanel({ relatedId, relatedType, token, db }) {
                   <div key={f.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
                     <span className="text-2xl">📄</span>
                     <div className="flex-1 min-w-0"><p className="text-sm font-medium text-gray-800 truncate">{f.name}</p><p className="text-xs text-gray-400">{new Date(f.created_at).toLocaleDateString()}</p></div>
-                    <a href={f.url} target="_blank" rel="noreferrer" className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg hover:bg-blue-100">Open</a>
+                    <a href={f.url} target="_blank" rel="noreferrer" className="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200">Open</a>
                     <button onClick={() => deleteFile(f)} className="text-xs text-red-400 hover:text-red-600">✕</button>
                   </div>
                 ))}
@@ -248,7 +311,7 @@ function DetailModal({ item, type, token, db, onClose, onUpdate }) {
       <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
         {["details", "photos", "documents", "notes"].map(t => (
           <button key={t} onClick={() => setActiveTab(t)}
-            className={`flex-1 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${activeTab === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            className={`flex-1 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${activeTab === t ? "bg-gray-800 text-white" : "text-gray-500 hover:text-gray-700"}`}>
             {t === "photos" ? "📸 Photos" : t === "documents" ? "📄 Docs" : t === "notes" ? "📝 Notes" : "ℹ️ Details"}
           </button>
         ))}
@@ -263,7 +326,7 @@ function DetailModal({ item, type, token, db, onClose, onUpdate }) {
                 <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Source</p><p className="text-sm font-medium">{item.source || "—"}</p></div>
                 <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Status</p><Badge label={item.status} /></div>
               </div>
-              {item.assigned_name && <div className="bg-amber-50 border border-amber-100 rounded-xl p-3"><p className="text-xs text-amber-600">Assigned To</p><p className="text-sm font-semibold text-amber-800">👤 {item.assigned_name}</p></div>}
+              {item.assigned_name && <div className="bg-gray-800 rounded-xl p-3"><p className="text-xs text-gray-400">Assigned To</p><p className="text-sm font-semibold text-white">👤 {item.assigned_name}</p></div>}
               {item.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium">{item.address}</p></div>}
             </>
           ) : (
@@ -285,8 +348,8 @@ function DetailModal({ item, type, token, db, onClose, onUpdate }) {
       {activeTab === "notes" && (
         <div>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={8} placeholder="Add notes, comments, or activity..."
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none mb-3" />
-          <button onClick={saveNotes} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none mb-3" />
+          <button onClick={saveNotes} disabled={saving} className={`w-full ${btnPrimary}`}>
             {saving ? "Saving..." : "Save Notes"}
           </button>
         </div>
@@ -311,12 +374,8 @@ function LeadsView({ db, token, profile }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [leadsData, members] = await Promise.all([
-        db.list("leads"),
-        db.list("profiles", "select=*&order=full_name.asc"),
-      ]);
-      setLeads(leadsData);
-      setTeamMembers(members);
+      const [leadsData, members] = await Promise.all([db.list("leads"), db.list("profiles", "select=*&order=full_name.asc")]);
+      setLeads(leadsData); setTeamMembers(members);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [db]);
@@ -362,26 +421,23 @@ function LeadsView({ db, token, profile }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Leads & Contacts</h2>
-          <p className="text-sm text-gray-500 mt-0.5">{leads.length} {isAdmin ? "total" : "assigned to you"}</p>
-        </div>
-        <button onClick={() => setShowModal(true)} className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-xl text-sm">+ Add Lead</button>
+        <div><h2 className="text-2xl font-bold text-gray-900">Leads & Contacts</h2><p className="text-sm text-gray-500 mt-0.5">{leads.length} {isAdmin ? "total" : "assigned to you"}</p></div>
+        <button onClick={() => setShowModal(true)} className={btnSm}>+ Add Lead</button>
       </div>
       <input placeholder="Search leads..." value={search} onChange={e => setSearch(e.target.value)}
-        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white shadow-sm mb-4" />
+        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white shadow-sm mb-4" />
       {loading ? <Spinner /> : (
         <div className="grid gap-3">
           {filtered.length === 0 && <p className="text-center text-gray-400 py-12">No leads yet</p>}
           {filtered.map(lead => (
             <div key={lead.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hover:shadow-md transition-shadow">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold flex-shrink-0">{lead.name?.[0] || "?"}</div>
+                <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white font-bold flex-shrink-0">{lead.name?.[0] || "?"}</div>
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelected(lead)}>
                   <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-gray-900">{lead.name}</span><Badge label={lead.status} /></div>
                   <p className="text-sm text-gray-500 mt-0.5">{lead.email}{lead.phone ? ` · ${lead.phone}` : ""}</p>
                   {lead.address && <p className="text-xs text-gray-400 mt-0.5 truncate">{lead.address}</p>}
-                  {lead.assigned_name && <p className="text-xs mt-1 text-amber-600 font-medium">👤 {lead.assigned_name}</p>}
+                  {lead.assigned_name && <p className="text-xs mt-1 text-gray-600 font-medium">👤 {lead.assigned_name}</p>}
                 </div>
                 <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
                   <select value={lead.status} onChange={e => updateStatus(lead.id, e.target.value)}
@@ -390,13 +446,13 @@ function LeadsView({ db, token, profile }) {
                   </select>
                   {isAdmin && (
                     <select value={lead.assigned_to || ""} onChange={e => assignLead(lead, e.target.value)}
-                      className="text-xs border border-amber-200 rounded-lg px-2 py-1 bg-amber-50 text-amber-700 focus:outline-none max-w-[130px]">
+                      className="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-gray-50 text-gray-700 focus:outline-none max-w-[130px]">
                       <option value="">Unassigned</option>
                       {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
                     </select>
                   )}
                   <div className="flex gap-2">
-                    <button onClick={() => setSelected(lead)} className="text-xs text-blue-400 hover:text-blue-600">View</button>
+                    <button onClick={() => setSelected(lead)} className="text-xs text-gray-500 hover:text-gray-800">View</button>
                     {isAdmin && <button onClick={() => deleteLead(lead.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>}
                   </div>
                 </div>
@@ -419,14 +475,14 @@ function LeadsView({ db, token, profile }) {
               <select value={form.assigned_to} onChange={e => {
                 const member = teamMembers.find(m => m.id === e.target.value);
                 setForm({ ...form, assigned_to: e.target.value, assigned_name: member?.full_name || member?.email || "" });
-              }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white">
+              }} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white">
                 <option value="">Unassigned</option>
                 {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
               </select>
             </div>
           )}
           <Field label="Notes" value={form.notes} onChange={v => setForm({ ...form, notes: v })} type="textarea" />
-          <button onClick={addLead} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">{saving ? "Saving..." : "Save Lead"}</button>
+          <button onClick={addLead} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Saving..." : "Save Lead"}</button>
         </Modal>
       )}
       {selected && (
@@ -487,12 +543,12 @@ function JobsView({ db, token }) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div><h2 className="text-2xl font-bold text-gray-900">Jobs & Projects</h2><p className="text-sm text-gray-500 mt-0.5">{jobs.length} total</p></div>
-        <button onClick={() => setShowModal(true)} className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-xl text-sm">+ New Job</button>
+        <button onClick={() => setShowModal(true)} className={btnSm}>+ New Job</button>
       </div>
       <div className="flex gap-2 mb-5 flex-wrap">
         {["All", ...JOB_STATUSES].map(s => (
           <button key={s} onClick={() => setFilter(s)}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === s ? "bg-amber-500 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-amber-400"}`}>{s}</button>
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === s ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-gray-400"}`}>{s}</button>
         ))}
       </div>
       {loading ? <Spinner /> : (
@@ -513,7 +569,7 @@ function JobsView({ db, token }) {
                     {JOB_STATUSES.map(s => <option key={s}>{s}</option>)}
                   </select>
                   <div className="flex gap-2">
-                    <button onClick={() => setSelected(job)} className="text-xs text-blue-400 hover:text-blue-600">View</button>
+                    <button onClick={() => setSelected(job)} className="text-xs text-gray-500 hover:text-gray-800">View</button>
                     <button onClick={() => deleteJob(job.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
                   </div>
                 </div>
@@ -532,7 +588,7 @@ function JobsView({ db, token }) {
           <Field label="Start Date" value={form.start_date} onChange={v => setForm({ ...form, start_date: v })} type="date" />
           <Field label="Contract Value ($)" value={form.value} onChange={v => setForm({ ...form, value: v })} type="number" />
           <Field label="Notes" value={form.notes} onChange={v => setForm({ ...form, notes: v })} type="textarea" />
-          <button onClick={addJob} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">{saving ? "Saving..." : "Save Job"}</button>
+          <button onClick={addJob} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Saving..." : "Save Job"}</button>
         </Modal>
       )}
       {selected && (
@@ -588,16 +644,16 @@ function EstimatesView({ db }) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div><h2 className="text-2xl font-bold text-gray-900">Estimates & Invoices</h2><p className="text-sm text-gray-500 mt-0.5">{items.length} documents</p></div>
-        <button onClick={() => setShowModal(true)} className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-xl text-sm">+ New</button>
+        <button onClick={() => setShowModal(true)} className={btnSm}>+ New</button>
       </div>
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-green-50 border border-green-100 rounded-2xl p-4"><p className="text-xs text-green-600 font-medium uppercase">Approved</p><p className="text-2xl font-bold text-green-700 mt-1">${totalApproved.toLocaleString()}</p></div>
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4"><p className="text-xs text-blue-600 font-medium uppercase">Paid</p><p className="text-2xl font-bold text-blue-700 mt-1">${totalPaid.toLocaleString()}</p></div>
+        <div className="bg-gray-800 rounded-2xl p-4"><p className="text-xs text-gray-400 font-medium uppercase">Approved</p><p className="text-2xl font-bold text-white mt-1">${totalApproved.toLocaleString()}</p></div>
+        <div className="bg-gray-600 rounded-2xl p-4"><p className="text-xs text-gray-300 font-medium uppercase">Paid</p><p className="text-2xl font-bold text-white mt-1">${totalPaid.toLocaleString()}</p></div>
       </div>
       <div className="flex gap-2 mb-5">
         {["Estimates", "Invoices"].map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === t ? "bg-amber-500 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>{t}</button>
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab === t ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>{t}</button>
         ))}
       </div>
       {loading ? <Spinner /> : (
@@ -612,7 +668,7 @@ function EstimatesView({ db }) {
             </tr></thead>
             <tbody>
               {filtered.map(item => (
-                <tr key={item.id} className="border-b border-gray-50 hover:bg-amber-50/30">
+                <tr key={item.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-mono text-gray-700 font-medium">{item.number}</td>
                   <td className="px-4 py-3 text-gray-700">{item.customer}</td>
                   <td className="px-4 py-3 text-right font-semibold">${Number(item.amount || 0).toLocaleString()}</td>
@@ -634,7 +690,7 @@ function EstimatesView({ db }) {
           <Field label="Date" value={form.date} onChange={v => setForm({ ...form, date: v })} type="date" />
           <Field label="Amount ($)" value={form.amount} onChange={v => setForm({ ...form, amount: v })} type="number" />
           <Field label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })} options={form.type === "Invoice" ? ["Draft", "Sent", "Paid"] : EST_STATUSES} />
-          <button onClick={addItem} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">{saving ? "Saving..." : `Save ${form.type}`}</button>
+          <button onClick={addItem} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Saving..." : `Save ${form.type}`}</button>
         </Modal>
       )}
     </div>
@@ -691,12 +747,12 @@ function TasksView({ db }) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div><h2 className="text-2xl font-bold text-gray-900">Tasks & Calendar</h2><p className="text-sm text-gray-500 mt-0.5">{pendingCount} pending · {doneCount} done</p></div>
-        <button onClick={() => setShowModal(true)} className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-xl text-sm">+ Add Task</button>
+        <button onClick={() => setShowModal(true)} className={btnSm}>+ Add Task</button>
       </div>
       <div className="flex gap-2 mb-5">
         {["Pending", "Done"].map(s => (
           <button key={s} onClick={() => setFilter(s)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === s ? "bg-amber-500 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === s ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>
             {s} ({s === "Pending" ? pendingCount : doneCount})
           </button>
         ))}
@@ -707,7 +763,7 @@ function TasksView({ db }) {
           {filtered.map(task => (
             <div key={task.id} className={`bg-white rounded-2xl border shadow-sm p-4 flex items-start gap-3 hover:shadow-md transition-all ${task.status === "Done" ? "opacity-60" : ""} border-gray-100`}>
               <button onClick={() => toggleDone(task)}
-                className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${task.status === "Done" ? "bg-green-500 border-green-500" : "border-gray-300 hover:border-amber-400"}`}>
+                className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${task.status === "Done" ? "bg-gray-800 border-gray-800" : "border-gray-300 hover:border-gray-600"}`}>
                 {task.status === "Done" && <span className="text-white text-xs">✓</span>}
               </button>
               <div className="flex-1 min-w-0">
@@ -735,7 +791,7 @@ function TasksView({ db }) {
           <Field label="Priority" value={form.priority} onChange={v => setForm({ ...form, priority: v })} options={TASK_PRIORITIES} />
           <Field label="Assigned To" value={form.assigned} onChange={v => setForm({ ...form, assigned: v })} />
           <Field label="Related Job / Lead" value={form.related} onChange={v => setForm({ ...form, related: v })} />
-          <button onClick={addTask} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">{saving ? "Saving..." : "Save Task"}</button>
+          <button onClick={addTask} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Saving..." : "Save Task"}</button>
         </Modal>
       )}
     </div>
@@ -763,10 +819,10 @@ function Dashboard({ db, setTab }) {
   }, [db]);
 
   const cards = [
-    { label: "Active Leads", value: stats.leads, icon: "👥", color: "bg-blue-50 border-blue-100", text: "text-blue-600", tab: "leads" },
-    { label: "Open Jobs", value: stats.jobs, icon: "🏗️", color: "bg-orange-50 border-orange-100", text: "text-orange-600", tab: "jobs" },
-    { label: "Pipeline", value: `$${stats.pipeline.toLocaleString()}`, icon: "💰", color: "bg-green-50 border-green-100", text: "text-green-600", tab: "estimates" },
-    { label: "Tasks Due", value: stats.tasks, icon: "✅", color: "bg-purple-50 border-purple-100", text: "text-purple-600", tab: "tasks" },
+    { label: "Active Leads", value: stats.leads, icon: "👥", color: "bg-gray-800", text: "text-white", sub: "text-gray-400", tab: "leads" },
+    { label: "Open Jobs", value: stats.jobs, icon: "🏗️", color: "bg-gray-700", text: "text-white", sub: "text-gray-400", tab: "jobs" },
+    { label: "Pipeline", value: `$${stats.pipeline.toLocaleString()}`, icon: "💰", color: "bg-gray-600", text: "text-white", sub: "text-gray-300", tab: "estimates" },
+    { label: "Tasks Due", value: stats.tasks, icon: "✅", color: "bg-gray-500", text: "text-white", sub: "text-gray-200", tab: "tasks" },
   ];
 
   return (
@@ -776,10 +832,10 @@ function Dashboard({ db, setTab }) {
         <>
           <div className="grid grid-cols-2 gap-3 mb-6">
             {cards.map(s => (
-              <button key={s.label} onClick={() => setTab(s.tab)} className={`${s.color} border rounded-2xl p-4 text-left hover:shadow-md transition-all`}>
+              <button key={s.label} onClick={() => setTab(s.tab)} className={`${s.color} rounded-2xl p-4 text-left hover:opacity-90 transition-all`}>
                 <div className="text-2xl mb-2">{s.icon}</div>
                 <p className={`text-2xl font-bold ${s.text}`}>{s.value}</p>
-                <p className="text-xs text-gray-500 mt-0.5 font-medium">{s.label}</p>
+                <p className={`text-xs mt-0.5 font-medium ${s.sub}`}>{s.label}</p>
               </button>
             ))}
           </div>
@@ -864,17 +920,17 @@ function AdminPanel({ db, currentUser }) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div><h2 className="text-2xl font-bold text-gray-900">Admin Panel</h2><p className="text-sm text-gray-500 mt-0.5">Manage your team</p></div>
-        <button onClick={() => setShowInvite(true)} className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2 rounded-xl text-sm">+ Add User</button>
+        <button onClick={() => setShowInvite(true)} className={btnSm}>+ Add User</button>
       </div>
-      <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-5">
-        <p className="text-sm text-amber-800 font-medium">👑 Admin Controls</p>
-        <p className="text-xs text-amber-600 mt-0.5">You can see all leads. Team members only see leads assigned to them.</p>
+      <div className="bg-gray-800 rounded-2xl p-4 mb-5">
+        <p className="text-sm text-white font-medium">👑 Admin Controls</p>
+        <p className="text-xs text-gray-400 mt-0.5">You can see all leads. Team members only see leads assigned to them.</p>
       </div>
       {loading ? <Spinner /> : (
         <div className="grid gap-3">
           {users.map(user => (
             <div key={user.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white font-bold flex-shrink-0">
                 {(user.full_name || user.email || "?")[0].toUpperCase()}
               </div>
               <div className="flex-1 min-w-0">
@@ -902,7 +958,7 @@ function AdminPanel({ db, currentUser }) {
           <Field label="Email *" value={inviteEmail} onChange={setInviteEmail} type="email" />
           <Field label="Password *" value={invitePassword} onChange={setInvitePassword} type="password" />
           <Field label="Role" value={inviteRole} onChange={setInviteRole} options={["member", "admin"]} />
-          <button onClick={createUser} disabled={saving} className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm">{saving ? "Creating..." : "Create User"}</button>
+          <button onClick={createUser} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Creating..." : "Create User"}</button>
         </Modal>
       )}
     </div>
@@ -928,31 +984,42 @@ function LoginScreen({ onLogin }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg"><span className="text-white text-3xl">⚒</span></div>
-          <h1 className="text-3xl font-bold text-gray-900">Simplicity</h1>
-          <p className="text-gray-500 mt-1 text-sm">Sign in to your account</p>
+    <div className="min-h-screen flex" style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+      {/* Left panel */}
+      <div className="hidden md:flex flex-col justify-between w-1/2 bg-gray-900 p-12">
+        <TetrahedronLogin />
+        <div>
+          <p className="text-gray-400 text-sm leading-relaxed">"The simplest way to run your business."</p>
+          <p className="text-gray-600 text-xs mt-2">— Simplicity CRM</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-xl p-6">
-          {error && <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-4 text-sm text-red-600">⚠️ {error}</div>}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-              onKeyDown={e => e.key === "Enter" && handleLogin()} />
+      </div>
+      {/* Right panel */}
+      <div className="flex-1 flex items-center justify-center px-6 bg-gray-50">
+        <div className="w-full max-w-sm">
+          <div className="flex justify-center mb-8 md:hidden">
+            <TetrahedronLogin />
           </div>
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-              onKeyDown={e => e.key === "Enter" && handleLogin()} />
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h1>
+          <p className="text-gray-500 text-sm mb-8">Sign in to your Simplicity account</p>
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            {error && <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-4 text-sm text-red-600">⚠️ {error}</div>}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                onKeyDown={e => e.key === "Enter" && handleLogin()} />
+            </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+                onKeyDown={e => e.key === "Enter" && handleLogin()} />
+            </div>
+            <button onClick={handleLogin} disabled={loading}
+              className={`w-full ${btnPrimary}`}>
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
           </div>
-          <button onClick={handleLogin} disabled={loading}
-            className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-md">
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
         </div>
       </div>
     </div>
@@ -987,19 +1054,16 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col" style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
-      <header className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-40">
+      <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-amber-500 rounded-lg flex items-center justify-center"><span className="text-white text-sm font-bold">⚒</span></div>
-            <span className="font-bold text-gray-900 text-lg tracking-tight">Simplicity</span>
-          </div>
+          <TetrahedronMark size={36} />
           <div className="relative">
             <button onClick={() => setShowUserMenu(!showUserMenu)} className="flex items-center gap-2">
               <div className="text-right hidden sm:block">
-                <p className="text-xs font-semibold text-gray-700">{auth.profile?.full_name || auth.session.user.email}</p>
-                <p className="text-xs text-amber-600 font-medium capitalize">{auth.profile?.role || "member"}</p>
+                <p className="text-xs font-semibold text-gray-200">{auth.profile?.full_name || auth.session.user.email}</p>
+                <p className="text-xs text-gray-500 capitalize">{auth.profile?.role || "member"}</p>
               </div>
-              <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 font-bold text-sm">
+              <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-gray-200 font-bold text-sm">
                 {(auth.profile?.full_name || auth.session.user.email || "?")[0].toUpperCase()}
               </div>
             </button>
@@ -1009,7 +1073,7 @@ export default function App() {
                   <p className="text-sm font-semibold text-gray-800 truncate">{auth.profile?.full_name || "User"}</p>
                   <p className="text-xs text-gray-400 truncate">{auth.session.user.email}</p>
                 </div>
-                {isAdmin && <button onClick={() => { setTab("admin"); setShowUserMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 flex items-center gap-2">⚙️ Admin Panel</button>}
+                {isAdmin && <button onClick={() => { setTab("admin"); setShowUserMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">⚙️ Admin Panel</button>}
                 <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2">🚪 Sign Out</button>
               </div>
             )}
@@ -1026,14 +1090,14 @@ export default function App() {
         {tab === "admin" && isAdmin && <AdminPanel db={db} currentUser={auth.profile} />}
       </main>
 
-      <nav className="bg-white border-t border-gray-100 shadow-[0_-1px_8px_rgba(0,0,0,0.06)] sticky bottom-0 z-40">
+      <nav className="bg-gray-900 border-t border-gray-800 sticky bottom-0 z-40">
         <div className="max-w-5xl mx-auto px-2 flex">
           {nav.map(n => (
             <button key={n.id} onClick={() => setTab(n.id)}
-              className={`flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-colors ${tab === n.id ? "text-amber-500" : "text-gray-400 hover:text-gray-600"}`}>
+              className={`flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-colors ${tab === n.id ? "text-white" : "text-gray-600 hover:text-gray-400"}`}>
               <span className="text-lg leading-none">{n.icon}</span>
               <span className="text-[10px] font-semibold tracking-wide">{n.label}</span>
-              {tab === n.id && <span className="w-4 h-0.5 bg-amber-500 rounded-full mt-0.5"></span>}
+              {tab === n.id && <span className="w-4 h-0.5 bg-white rounded-full mt-0.5"></span>}
             </button>
           ))}
         </div>
