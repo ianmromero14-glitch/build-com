@@ -446,9 +446,14 @@ function LeadDetailModal({ lead, db, token, teamMembers, onClose, onUpdate, onCo
 
   const saveNotes = async () => {
     setSaving(true);
-    try { await db.update("leads", lead.id, { notes }); onUpdate({ ...lead, notes }); }
-    catch (e) { Sentry.captureException(e); }
-    finally { setSaving(false); }
+    try {
+      await db.update("leads", lead.id, { notes });
+      onUpdate({ ...lead, notes });
+      alert("✅ Notes saved!");
+    } catch (e) {
+      Sentry.captureException(e);
+      alert("❌ Error saving notes: " + e.message);
+    } finally { setSaving(false); }
   };
 
   const tabs = ["pipeline", "proposal", "photos", "documents", "notes"];
@@ -567,9 +572,14 @@ function JobDetailModal({ job, db, token, onClose, onUpdate }) {
 
   const saveNotes = async () => {
     setSaving(true);
-    try { await db.update("jobs", job.id, { notes }); onUpdate({ ...job, notes }); }
-    catch (e) { Sentry.captureException(e); }
-    finally { setSaving(false); }
+    try {
+      await db.update("jobs", job.id, { notes });
+      onUpdate({ ...job, notes });
+      alert("✅ Notes saved!");
+    } catch (e) {
+      Sentry.captureException(e);
+      alert("❌ Error saving notes: " + e.message);
+    } finally { setSaving(false); }
   };
 
   const tabs = ["overview", "tasks", "photos", "documents", "notes"];
