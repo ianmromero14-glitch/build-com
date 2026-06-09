@@ -252,6 +252,7 @@ function FilePanel({ relatedId, relatedType, token, db }) {
   const [uploading, setUploading] = useState(false);
   const [lightbox, setLightbox] = useState(null);
   const fileRef = useRef();
+  const cameraRef = useRef();
 
   const loadFiles = useCallback(async () => {
     setLoading(true);
@@ -282,10 +283,16 @@ function FilePanel({ relatedId, relatedType, token, db }) {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-5">
-        <button onClick={() => fileRef.current.click()} disabled={uploading} className={`${btnSm} flex items-center gap-2`}>
-          {uploading ? "Uploading..." : "📎 Upload Files"}
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
+        <button onClick={() => cameraRef.current.click()} disabled={uploading}
+          className={`${btnSm} flex items-center gap-2`}>
+          {uploading ? "Uploading..." : "📷 Take Photo"}
         </button>
+        <button onClick={() => fileRef.current.click()} disabled={uploading}
+          className="border-2 border-gray-300 hover:border-gray-500 text-gray-700 font-semibold px-4 py-2 rounded-xl text-sm transition-colors flex items-center gap-2 bg-white">
+          📎 Upload File
+        </button>
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleUpload} />
         <input ref={fileRef} type="file" multiple className="hidden" onChange={handleUpload} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
       </div>
       {loading ? <Spinner /> : (
