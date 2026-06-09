@@ -455,11 +455,14 @@ function LeadDetailModal({ lead, db, token, teamMembers, onClose, onUpdate, onCo
 
   return (
     <Modal title={lead.name} onClose={onClose} wide>
-      {/* Stage progress */}
-      <PipelineBar stages={LEAD_STAGES} current={form.stage} onChange={async (s) => {
-        setForm({ ...form, stage: s });
-        await saveField("stage", s);
-      }} />
+      {/* Stage dropdown */}
+      <div className="mb-5">
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Pipeline Stage</label>
+        <select value={form.stage} onChange={async e => { setForm({ ...form, stage: e.target.value }); await saveField("stage", e.target.value); }}
+          className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white">
+          {LEAD_STAGES.map(s => <option key={s} value={s}>{stageIcon[s]} {s}</option>)}
+        </select>
+      </div>
 
       {/* Convert to Job button */}
       {(form.stage === "Sold") && (
@@ -531,9 +534,19 @@ function LeadDetailModal({ lead, db, token, teamMembers, onClose, onUpdate, onCo
       {activeTab === "documents" && <FilePanel relatedId={lead.id} relatedType="lead-docs" token={token} db={db} />}
       {activeTab === "notes" && (
         <div>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={8} placeholder="Add notes..."
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none mb-3" />
-          <button onClick={saveNotes} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Saving..." : "Save Notes"}</button>
+          <p className="text-xs text-gray-400 mb-2">Type your notes below and tap Save when done.</p>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            rows={10}
+            placeholder="Type your notes here..."
+            style={{ fontSize: 16 }}
+            className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-gray-400 resize-none mb-3 bg-white"
+          />
+          <button onClick={saveNotes} disabled={saving} className={`w-full ${btnPrimary}`}>
+            {saving ? "Saving..." : "💾 Save Notes"}
+          </button>
+          {notes && <p className="text-xs text-gray-400 text-center mt-2">{notes.length} characters</p>}
         </div>
       )}
     </Modal>
@@ -563,10 +576,14 @@ function JobDetailModal({ job, db, token, onClose, onUpdate }) {
 
   return (
     <Modal title={job.title} onClose={onClose} wide>
-      <PipelineBar stages={JOB_STAGES} current={stage} onChange={async (s) => {
-        setStage(s);
-        await saveField("stage", s);
-      }} />
+      {/* Stage dropdown */}
+      <div className="mb-5">
+        <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Job Stage</label>
+        <select value={stage} onChange={async e => { setStage(e.target.value); await saveField("stage", e.target.value); }}
+          className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white">
+          {JOB_STAGES.map(s => <option key={s} value={s}>{stageIcon[s]} {s}</option>)}
+        </select>
+      </div>
 
       <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1 overflow-x-auto">
         {tabs.map(t => (
