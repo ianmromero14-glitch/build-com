@@ -1353,9 +1353,15 @@ function RecommendationsView({ db, profile }) {
 }
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
-function AccessRequests() {
+function generatePassword() {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
+  return Array.from({length: 12}, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+function AccessRequests({ onBadgeUpdate }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [approving, setApproving] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1363,21 +1369,77 @@ function AccessRequests() {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/access_requests?select=*&order=created_at.desc`, {
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
       });
-      setRequests(await res.json());
+      const data = await res.json();
+      setRequests(data);
+      onBadgeUpdate && onBadgeUpdate(data.filter(r => r.status === "Pending").length);
     } catch (e) { Sentry.captureException(e); }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const updateStatus = async (id, status) => {
-    setRequests(requests.map(r => r.id === id ? { ...r, status } : r));
+  const approve = async (req) => {
+    setApproving(req.id);
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/access_requests?id=eq.${id}`, {
+      // 1. Generate a password
+      const password = generatePassword();
+      // 2. Create the auth user
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ email: req.email, password, email_confirm: true }),
+      });
+      const user = await res.json();
+      if (!res.ok) throw new Error(user.msg || "Failed to create user");
+      // 3. Update profile with name
+      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}`, {
         method: "PATCH",
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ full_name: req.full_name, role: "member" }),
       });
-    } catch (e) { Sentry.captureException(e); load(); }
+      // 4. Update request status and save password
+      await fetch(`${SUPABASE_URL}/rest/v1/access_requests?id=eq.${req.id}`, {
+        method: "PATCH",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "Approved", auto_password: password }),
+      });
+      // 5. Email them their credentials
+      await sendEmail(
+        `✅ Your Simplicity CRM Access Has Been Approved`,
+        `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+          <div style="background:#1C1F22;border-radius:12px;padding:24px;margin-bottom:24px;">
+            <h1 style="color:white;margin:0;font-size:22px;letter-spacing:2px;">SIMPLICITY</h1>
+            <p style="color:#6B7280;margin:4px 0 0;font-size:13px;">CRM</p>
+          </div>
+          <h2 style="color:#111827;">Welcome, ${req.full_name}! 🎉</h2>
+          <p style="color:#6B7280;">Your access request has been approved. Here are your login credentials:</p>
+          <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:20px;margin:16px 0;">
+            <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Login URL</p>
+            <p style="margin:0 0 16px;color:#111827;font-weight:600;">build-com-topaz.vercel.app</p>
+            <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Email</p>
+            <p style="margin:0 0 16px;color:#111827;font-weight:600;">${req.email}</p>
+            <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Temporary Password</p>
+            <p style="margin:0;color:#111827;font-weight:700;font-size:18px;letter-spacing:2px;">${password}</p>
+          </div>
+          <p style="color:#6B7280;font-size:13px;">Please change your password after your first login.</p>
+          <p style="color:#9CA3AF;font-size:12px;text-align:center;margin-top:24px;">Simplicity CRM · Sent automatically</p>
+        </div>`
+      );
+      setRequests(requests.map(r => r.id === req.id ? { ...r, status: "Approved", auto_password: password } : r));
+      onBadgeUpdate && onBadgeUpdate(requests.filter(r => r.status === "Pending" && r.id !== req.id).length);
+      alert(`✅ Account created! Login details sent to ${req.email}`);
+    } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
+    finally { setApproving(null); }
+  };
+
+  const deny = async (req) => {
+    if (!confirm(`Deny access for ${req.full_name}?`)) return;
+    await fetch(`${SUPABASE_URL}/rest/v1/access_requests?id=eq.${req.id}`, {
+      method: "PATCH",
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "Denied" }),
+    });
+    setRequests(requests.map(r => r.id === req.id ? { ...r, status: "Denied" } : r));
+    onBadgeUpdate && onBadgeUpdate(requests.filter(r => r.status === "Pending" && r.id !== req.id).length);
   };
 
   const pending = requests.filter(r => r.status === "Pending");
@@ -1399,11 +1461,17 @@ function AccessRequests() {
                   <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-gray-900">{req.full_name}</span><Badge label={req.status} /></div>
                   <p className="text-sm text-gray-500 mt-0.5">{req.email}</p>
                   <p className="text-sm text-gray-600 mt-1 italic">"{req.reason}"</p>
+                  {req.status === "Approved" && req.auto_password && (
+                    <p className="text-xs text-green-600 mt-1 font-medium">✅ Account created · Login emailed</p>
+                  )}
                 </div>
                 {req.status === "Pending" && (
                   <div className="flex flex-col gap-2 flex-shrink-0">
-                    <button onClick={() => updateStatus(req.id, "Approved")} className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700">Approve</button>
-                    <button onClick={() => updateStatus(req.id, "Denied")} className="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100">Deny</button>
+                    <button onClick={() => approve(req)} disabled={approving === req.id}
+                      className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 disabled:opacity-50">
+                      {approving === req.id ? "Creating..." : "Approve"}
+                    </button>
+                    <button onClick={() => deny(req)} className="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100">Deny</button>
                   </div>
                 )}
               </div>
@@ -1415,10 +1483,12 @@ function AccessRequests() {
   );
 }
 
-function AdminPanel({ db, currentUser }) {
+function AdminPanel({ db, currentUser, onBadgeUpdate }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInvite, setShowInvite] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState(0);
+  useEffect(() => { onBadgeUpdate && onBadgeUpdate(pendingRequests); }, [pendingRequests]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [invitePassword, setInvitePassword] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
@@ -1493,7 +1563,7 @@ function AdminPanel({ db, currentUser }) {
           ))}
         </div>
       )}
-      <AccessRequests />
+      <AccessRequests onBadgeUpdate={setPendingRequests} />
       {showInvite && (
         <Modal title="Add New User" onClose={() => { setShowInvite(false); setInviteMsg(""); }}>
           {inviteMsg && <div className={`rounded-xl px-4 py-3 mb-4 text-sm ${inviteMsg.startsWith("✅") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>{inviteMsg}</div>}
@@ -1652,6 +1722,7 @@ export default function App() {
 
   const db = auth ? makeDb(auth.session.access_token) : null;
   const isAdmin = auth?.profile?.role === "admin";
+  const [pendingBadge, setPendingBadge] = useState(0);
   const nav = [...NAV, ...(isAdmin ? [{ id: "admin", label: "Admin", icon: "⚙️" }] : [])];
 
   const handleLogin = ({ session, profile }) => {
@@ -1712,7 +1783,7 @@ export default function App() {
           {tab === "estimates" && <EstimatesView db={db} />}
           {tab === "tasks" && <TasksView db={db} />}
           {tab === "recs" && <RecommendationsView db={db} profile={auth.profile} />}
-          {tab === "admin" && isAdmin && <AdminPanel db={db} currentUser={auth.profile} />}
+          {tab === "admin" && isAdmin && <AdminPanel db={db} currentUser={auth.profile} onBadgeUpdate={setPendingBadge} />}
         </main>
 
         <nav className="bg-gray-900 border-t border-gray-800 sticky bottom-0 z-40">
@@ -1720,7 +1791,12 @@ export default function App() {
             {nav.map(n => (
               <button key={n.id} onClick={() => setTab(n.id)}
                 className={`flex-1 flex flex-col items-center py-2.5 gap-0.5 transition-colors ${tab === n.id ? "text-white" : "text-gray-600 hover:text-gray-400"}`}>
-                <span className="text-lg leading-none">{n.icon}</span>
+                <span className="text-lg leading-none relative">
+                  {n.icon}
+                  {n.id === "admin" && pendingBadge > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold w-3.5 h-3.5 rounded-full flex items-center justify-center">{pendingBadge}</span>
+                  )}
+                </span>
                 <span className="text-[10px] font-semibold tracking-wide">{n.label}</span>
                 {tab === n.id && <span className="w-4 h-0.5 bg-white rounded-full mt-0.5"></span>}
               </button>
