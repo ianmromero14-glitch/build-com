@@ -10,8 +10,7 @@ Sentry.init({
 
 const SUPABASE_URL = "https://zbvxrwftgtiwtlqzgztv.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpidnhyd2Z0Z3Rpd3RscXpnenR2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3NzU4NDgsImV4cCI6MjA5NjM1MTg0OH0.uuyQAAeJxtlf6FzjRMEUvdfTy5VD3j3mfy8G_lXx_ag";
-const RESEND_KEY = "re_N8yv9ks4_26JJGC57Z9pkVrXGidhmqsF9";
-const ADMIN_EMAIL = "ianmromero14@gmail.com";
+// Email handled by /api/send-email serverless function
 
 // ─── PIPELINE STAGES ──────────────────────────────────────────────────────────
 const LEAD_STAGES = ["Lead", "Inspection", "Proposal Sent", "Sold", "Lost"];
@@ -38,12 +37,12 @@ const stageIcon = {
 // ─── EMAIL HELPERS ────────────────────────────────────────────────────────────
 async function sendEmail(subject, html) {
   try {
-    await fetch("https://api.resend.com/emails", {
+    await fetch("/api/send-email", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: "Simplicity CRM <onboarding@resend.dev>", to: [ADMIN_EMAIL], subject, html }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject, html }),
     });
-  } catch (e) { Sentry.captureException(e); }
+  } catch (e) { Sentry.captureException(e); console.error("Email failed:", e); }
 }
 
 async function sendAccessRequestEmail(full_name, email, reason) {
