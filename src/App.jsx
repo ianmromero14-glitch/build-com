@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as Sentry from "@sentry/react";
 
-// ─── SENTRY INIT ──────────────────────────────────────────────────────────────
 Sentry.init({
   dsn: "https://16553aefa9b446bb357a046ad85f06f9@o4511527733755904.ingest.us.sentry.io/4511527740899328",
   sendDefaultPii: true,
@@ -14,64 +13,107 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const RESEND_KEY = "re_N8yv9ks4_26JJGC57Z9pkVrXGidhmqsF9";
 const ADMIN_EMAIL = "ianmromero14@gmail.com";
 
-// ─── SEND EMAIL VIA RESEND ────────────────────────────────────────────────────
-async function sendAccessRequestEmail(full_name, email, reason) {
+// ─── PIPELINE STAGES ──────────────────────────────────────────────────────────
+const LEAD_STAGES = ["Lead", "Inspection", "Proposal Sent", "Sold", "Lost"];
+const JOB_STAGES = ["In Production", "Invoiced", "Complete", "Cancelled"];
+
+const stageColors = {
+  "Lead": "bg-blue-100 text-blue-700",
+  "Inspection": "bg-purple-100 text-purple-700",
+  "Proposal Sent": "bg-yellow-100 text-yellow-700",
+  "Sold": "bg-green-100 text-green-700",
+  "Lost": "bg-red-100 text-red-700",
+  "In Production": "bg-orange-100 text-orange-700",
+  "Invoiced": "bg-blue-100 text-blue-700",
+  "Complete": "bg-green-100 text-green-700",
+  "Cancelled": "bg-red-100 text-red-700",
+};
+
+const stageIcon = {
+  "Lead": "👤", "Inspection": "🔍", "Proposal Sent": "📋",
+  "Sold": "🤝", "Lost": "❌", "In Production": "🏗️",
+  "Invoiced": "💰", "Complete": "✅", "Cancelled": "🚫",
+};
+
+// ─── EMAIL HELPERS ────────────────────────────────────────────────────────────
+async function sendEmail(subject, html) {
   try {
     await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { "Authorization": `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: "Simplicity CRM <onboarding@resend.dev>",
-        to: [ADMIN_EMAIL],
-        subject: `🔑 New Access Request from ${full_name}`,
-        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;"><div style="background:#1C1F22;border-radius:12px;padding:24px;margin-bottom:24px;"><h1 style="color:white;margin:0;font-size:22px;letter-spacing:2px;">SIMPLICITY</h1><p style="color:#6B7280;margin:4px 0 0;font-size:13px;">CRM</p></div><h2 style="color:#111827;">New Access Request</h2><p style="color:#6B7280;font-size:14px;">Someone is requesting access to Simplicity CRM.</p><div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:20px;margin:16px 0;"><p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Name</p><p style="margin:0 0 16px;color:#111827;font-weight:600;">${full_name}</p><p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Email</p><p style="margin:0 0 16px;color:#111827;">${email}</p><p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Reason</p><p style="margin:0;color:#111827;">${reason}</p></div><p style="color:#6B7280;font-size:14px;">Log into Admin Panel to approve or deny.</p><p style="color:#9CA3AF;font-size:12px;text-align:center;margin-top:24px;">Simplicity CRM · Sent automatically</p></div>`,
-      }),
+      body: JSON.stringify({ from: "Simplicity CRM <onboarding@resend.dev>", to: [ADMIN_EMAIL], subject, html }),
     });
   } catch (e) { Sentry.captureException(e); }
 }
 
-async function sendRecommendationEmail(from_name, category, message) {
-  try {
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: "Simplicity CRM <onboarding@resend.dev>",
-        to: [ADMIN_EMAIL],
-        subject: `💡 New Recommendation: ${category}`,
-        html: `
-          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">
-            <div style="background: #1C1F22; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
-              <h1 style="color: white; margin: 0; font-size: 22px; letter-spacing: 2px;">SIMPLICITY</h1>
-              <p style="color: #6B7280; margin: 4px 0 0; font-size: 13px;">CRM</p>
-            </div>
-            <h2 style="color: #111827; margin-bottom: 8px;">New Recommendation Submitted</h2>
-            <p style="color: #6B7280; margin-bottom: 24px; font-size: 14px;">A team member has submitted a new recommendation.</p>
-            <div style="background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 12px; padding: 20px; margin-bottom: 16px;">
-              <p style="margin: 0 0 8px; color: #6B7280; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">From</p>
-              <p style="margin: 0 0 16px; color: #111827; font-weight: 600;">${from_name}</p>
-              <p style="margin: 0 0 8px; color: #6B7280; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Category</p>
-              <p style="margin: 0 0 16px;"><span style="background: #1C1F22; color: white; padding: 4px 12px; border-radius: 20px; font-size: 13px;">${category}</span></p>
-              <p style="margin: 0 0 8px; color: #6B7280; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Message</p>
-              <p style="margin: 0; color: #111827; line-height: 1.6;">${message}</p>
-            </div>
-            <p style="color: #9CA3AF; font-size: 12px; text-align: center; margin-top: 24px;">Simplicity CRM · Sent automatically</p>
-          </div>
-        `,
-      }),
-    });
-  } catch (e) {
-    Sentry.captureException(e);
-    console.error("Email send failed:", e);
-  }
+async function sendAccessRequestEmail(full_name, email, reason) {
+  await sendEmail(`🔑 New Access Request from ${full_name}`,
+    `<div style="font-family:sans-serif;padding:24px;"><h2>New Access Request</h2><p><b>Name:</b> ${full_name}</p><p><b>Email:</b> ${email}</p><p><b>Reason:</b> ${reason}</p></div>`);
 }
 
-// ─── STAR TETRAHEDRON LOGO ────────────────────────────────────────────────────
+async function sendRecommendationEmail(from_name, category, message) {
+  await sendEmail(`💡 New Recommendation: ${category}`,
+    `<div style="font-family:sans-serif;padding:24px;"><h2>New Recommendation</h2><p><b>From:</b> ${from_name}</p><p><b>Category:</b> ${category}</p><p><b>Message:</b> ${message}</p></div>`);
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+async function signIn(email, password) {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST",
+    headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || data.error || data.msg || JSON.stringify(data));
+  return data;
+}
+async function signOut(token) {
+  await fetch(`${SUPABASE_URL}/auth/v1/logout`, { method: "POST", headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` } });
+}
+async function getProfile(userId, token) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=*`, {
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
+  });
+  const data = await res.json();
+  return data[0] || null;
+}
+
+// ─── DB ───────────────────────────────────────────────────────────────────────
+function makeDb(token) {
+  async function sbFetch(table, method = "GET", body = null, query = "") {
+    const headers = { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`, "Content-Type": "application/json", "Prefer": method === "POST" ? "return=representation" : "" };
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, { method, headers, body: body ? JSON.stringify(body) : null });
+    if (!res.ok) { const e = await res.text(); throw new Error(e); }
+    if (method === "DELETE" || res.status === 204) return null;
+    return res.json();
+  }
+  return {
+    list: (table, query = "select=*&order=created_at.desc") => sbFetch(table, "GET", null, query),
+    insert: (table, data) => sbFetch(table, "POST", data),
+    update: (table, id, data) => sbFetch(table, "PATCH", data, `id=eq.${id}`),
+    delete: (table, id) => sbFetch(table, "DELETE", null, `id=eq.${id}`),
+  };
+}
+
+// ─── STORAGE ──────────────────────────────────────────────────────────────────
+async function uploadFile(token, file, relatedId, relatedType, db) {
+  const ext = file.name.split(".").pop();
+  const path = `${relatedType}/${relatedId}/${Date.now()}.${ext}`;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/job-files/${path}`, {
+    method: "POST", headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`, "Content-Type": file.type }, body: file,
+  });
+  if (!res.ok) { const e = await res.text(); throw new Error(e); }
+  const url = `${SUPABASE_URL}/storage/v1/object/public/job-files/${path}`;
+  await db.insert("files", { name: file.name, url, type: file.type, related_id: relatedId, related_type: relatedType });
+  return url;
+}
+
+// ─── LOGO ─────────────────────────────────────────────────────────────────────
 function TetrahedronMark({ size = 36 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <rect width="64" height="64" rx="12" fill="#1C1F22"/>
-      <g transform="translate(20, 32)">
+      <g transform="translate(20,32)">
         <polygon points="0,-22 -16,-4 16,-4" fill="#4B5563"/>
         <polygon points="0,-22 -16,-4 0,-4" fill="#374151"/>
         <polygon points="0,-22 16,-4 0,-4" fill="#6B7280"/>
@@ -100,7 +142,7 @@ function TetrahedronLogin() {
   return (
     <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
       <rect width="120" height="120" rx="24" fill="#1C1F22"/>
-      <g transform="translate(42, 60)">
+      <g transform="translate(42,60)">
         <polygon points="0,-38 -28,-6 28,-6" fill="#4B5563"/>
         <polygon points="0,-38 -28,-6 0,-6" fill="#374151"/>
         <polygon points="0,-38 28,-6 0,-6" fill="#6B7280"/>
@@ -125,70 +167,6 @@ function TetrahedronLogin() {
   );
 }
 
-// ─── AUTH ─────────────────────────────────────────────────────────────────────
-async function signIn(email, password) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-    method: "POST",
-    headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error_description || data.error || data.msg || JSON.stringify(data));
-  return data;
-}
-async function signOut(token) {
-  await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
-    method: "POST",
-    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
-  });
-}
-async function getProfile(userId, token) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=*`, {
-    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
-  });
-  const data = await res.json();
-  return data[0] || null;
-}
-
-// ─── DB ───────────────────────────────────────────────────────────────────────
-function makeDb(token) {
-  async function sbFetch(table, method = "GET", body = null, query = "") {
-    const headers = {
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "Prefer": method === "POST" ? "return=representation" : "",
-    };
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
-      method, headers, body: body ? JSON.stringify(body) : null,
-    });
-    if (!res.ok) { const e = await res.text(); throw new Error(e); }
-    if (method === "DELETE" || res.status === 204) return null;
-    return res.json();
-  }
-  return {
-    list: (table, query = "select=*&order=created_at.desc") => sbFetch(table, "GET", null, query),
-    insert: (table, data) => sbFetch(table, "POST", data),
-    update: (table, id, data) => sbFetch(table, "PATCH", data, `id=eq.${id}`),
-    delete: (table, id) => sbFetch(table, "DELETE", null, `id=eq.${id}`),
-  };
-}
-
-// ─── STORAGE ──────────────────────────────────────────────────────────────────
-async function uploadFile(token, file, relatedId, relatedType, db) {
-  const ext = file.name.split(".").pop();
-  const path = `${relatedType}/${relatedId}/${Date.now()}.${ext}`;
-  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/job-files/${path}`, {
-    method: "POST",
-    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`, "Content-Type": file.type },
-    body: file,
-  });
-  if (!res.ok) { const e = await res.text(); throw new Error(e); }
-  const url = `${SUPABASE_URL}/storage/v1/object/public/job-files/${path}`;
-  await db.insert("files", { name: file.name, url, type: file.type, related_id: relatedId, related_type: relatedType });
-  return url;
-}
-
 // ─── UI HELPERS ───────────────────────────────────────────────────────────────
 const statusColors = {
   New: "bg-blue-100 text-blue-700", Contacted: "bg-yellow-100 text-yellow-700",
@@ -201,14 +179,14 @@ const statusColors = {
   Done: "bg-green-100 text-green-700", High: "bg-red-100 text-red-700",
   Medium: "bg-yellow-100 text-yellow-700", Low: "bg-gray-100 text-gray-600",
   admin: "bg-gray-700 text-gray-100", member: "bg-gray-100 text-gray-600",
-  "Under Review": "bg-yellow-100 text-yellow-700",
-  Implemented: "bg-green-100 text-green-700",
+  "Under Review": "bg-yellow-100 text-yellow-700", Implemented: "bg-green-100 text-green-700",
   Dismissed: "bg-red-100 text-red-600",
 };
 const priorityDot = { High: "bg-red-500", Medium: "bg-yellow-400", Low: "bg-gray-400" };
 
-function Badge({ label }) {
-  return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusColors[label] || "bg-gray-100 text-gray-600"}`}>{label}</span>;
+function Badge({ label, color }) {
+  const cls = color || stageColors[label] || statusColors[label] || "bg-gray-100 text-gray-600";
+  return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}`}>{label}</span>;
 }
 function Spinner() {
   return <div className="flex items-center justify-center py-16"><div className="w-8 h-8 border-4 border-gray-200 border-t-gray-600 rounded-full animate-spin"></div></div>;
@@ -245,9 +223,27 @@ function Field({ label, value, onChange, type = "text", options, disabled }) {
     </div>
   );
 }
-
 const btnPrimary = "bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl text-sm transition-colors";
 const btnSm = "bg-gray-800 hover:bg-gray-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors";
+
+// ─── PIPELINE PROGRESS BAR ────────────────────────────────────────────────────
+function PipelineBar({ stages, current, onChange }) {
+  const idx = stages.indexOf(current);
+  return (
+    <div className="mb-5">
+      <div className="flex items-center gap-1 mb-2">
+        {stages.map((s, i) => (
+          <button key={s} onClick={() => onChange(s)}
+            className={`flex-1 h-2 rounded-full transition-all ${i <= idx ? "bg-gray-800" : "bg-gray-200"}`} title={s} />
+        ))}
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-gray-500">{stageIcon[current]} {current}</span>
+        <span className="text-xs text-gray-400">Step {idx + 1} of {stages.length}</span>
+      </div>
+    </div>
+  );
+}
 
 // ─── FILE PANEL ───────────────────────────────────────────────────────────────
 function FilePanel({ relatedId, relatedType, token, db }) {
@@ -263,24 +259,21 @@ function FilePanel({ relatedId, relatedType, token, db }) {
     catch (e) { Sentry.captureException(e); }
     finally { setLoading(false); }
   }, [db, relatedId]);
-
   useEffect(() => { loadFiles(); }, [loadFiles]);
 
   const handleUpload = async (e) => {
     const selected = Array.from(e.target.files);
     if (!selected.length) return;
     setUploading(true);
-    try {
-      for (const file of selected) await uploadFile(token, file, relatedId, relatedType, db);
-      await loadFiles();
-    } catch (err) { Sentry.captureException(err); alert("Upload failed: " + err.message); }
+    try { for (const file of selected) await uploadFile(token, file, relatedId, relatedType, db); await loadFiles(); }
+    catch (err) { Sentry.captureException(err); alert("Upload failed: " + err.message); }
     finally { setUploading(false); }
   };
 
   const deleteFile = async (file) => {
     if (!confirm("Delete this file?")) return;
     try { await db.delete("files", file.id); setFiles(files.filter(f => f.id !== file.id)); }
-    catch (e) { Sentry.captureException(e); alert("Delete failed: " + e.message); }
+    catch (e) { Sentry.captureException(e); }
   };
 
   const isImage = (f) => f.type?.startsWith("image/");
@@ -293,7 +286,6 @@ function FilePanel({ relatedId, relatedType, token, db }) {
         <button onClick={() => fileRef.current.click()} disabled={uploading} className={`${btnSm} flex items-center gap-2`}>
           {uploading ? "Uploading..." : "📎 Upload Files"}
         </button>
-        <span className="text-xs text-gray-400">Photos, PDFs, contracts...</span>
         <input ref={fileRef} type="file" multiple className="hidden" onChange={handleUpload} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx" />
       </div>
       {loading ? <Spinner /> : (
@@ -321,7 +313,7 @@ function FilePanel({ relatedId, relatedType, token, db }) {
                 {docs.map(f => (
                   <div key={f.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
                     <span className="text-2xl">📄</span>
-                    <div className="flex-1 min-w-0"><p className="text-sm font-medium text-gray-800 truncate">{f.name}</p><p className="text-xs text-gray-400">{new Date(f.created_at).toLocaleDateString()}</p></div>
+                    <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{f.name}</p></div>
                     <a href={f.url} target="_blank" rel="noreferrer" className="text-xs bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200">Open</a>
                     <button onClick={() => deleteFile(f)} className="text-xs text-red-400 hover:text-red-600">✕</button>
                   </div>
@@ -332,7 +324,6 @@ function FilePanel({ relatedId, relatedType, token, db }) {
           {files.length === 0 && (
             <div className="text-center py-10 border-2 border-dashed border-gray-200 rounded-2xl">
               <p className="text-gray-400 text-sm">No files yet</p>
-              <p className="text-gray-300 text-xs mt-1">Upload photos, contracts, or documents</p>
             </div>
           )}
         </>
@@ -343,10 +334,7 @@ function FilePanel({ relatedId, relatedType, token, db }) {
             <img src={lightbox.url} alt={lightbox.name} className="w-full max-h-[80vh] object-contain rounded-xl" />
             <div className="flex items-center justify-between mt-3">
               <p className="text-white text-sm">{lightbox.name}</p>
-              <div className="flex gap-2">
-                <a href={lightbox.url} target="_blank" rel="noreferrer" className="bg-white/20 text-white px-3 py-1.5 rounded-lg text-sm">Download</a>
-                <button onClick={() => setLightbox(null)} className="bg-white/20 text-white px-3 py-1.5 rounded-lg text-sm">Close</button>
-              </div>
+              <button onClick={() => setLightbox(null)} className="bg-white/20 text-white px-3 py-1.5 rounded-lg text-sm">Close</button>
             </div>
           </div>
         </div>
@@ -355,63 +343,195 @@ function FilePanel({ relatedId, relatedType, token, db }) {
   );
 }
 
-// ─── DETAIL MODAL ─────────────────────────────────────────────────────────────
-function DetailModal({ item, type, token, db, onClose, onUpdate }) {
-  const [activeTab, setActiveTab] = useState("details");
-  const [notes, setNotes] = useState(item.notes || "");
+// ─── PRODUCTION TASKS ─────────────────────────────────────────────────────────
+const DEFAULT_TASKS = ["Pull permit", "Order materials", "Assign crew", "Schedule start date", "Quality inspection", "Take completion photos", "Send invoice"];
+
+function ProductionTasks({ jobId, db }) {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [newTask, setNewTask] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setTasks(await db.list("pipeline_tasks", `select=*&job_id=eq.${jobId}&order=created_at.asc`)); }
+    catch (e) { Sentry.captureException(e); }
+    finally { setLoading(false); }
+  }, [db, jobId]);
+  useEffect(() => { load(); }, [load]);
+
+  const addTask = async (title) => {
+    if (!title.trim()) return;
+    try {
+      const [created] = await db.insert("pipeline_tasks", { job_id: jobId, title: title.trim(), status: "Pending" });
+      setTasks([...tasks, created]);
+      setNewTask("");
+    } catch (e) { Sentry.captureException(e); }
+  };
+
+  const toggleTask = async (task) => {
+    const newStatus = task.status === "Done" ? "Pending" : "Done";
+    setTasks(tasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
+    try { await db.update("pipeline_tasks", task.id, { status: newStatus }); } catch (e) { Sentry.captureException(e); load(); }
+  };
+
+  const deleteTask = async (id) => {
+    setTasks(tasks.filter(t => t.id !== id));
+    try { await db.delete("pipeline_tasks", id); } catch (e) { Sentry.captureException(e); load(); }
+  };
+
+  const done = tasks.filter(t => t.status === "Done").length;
+
+  return (
+    <div>
+      {tasks.length > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-500 font-medium">{done}/{tasks.length} completed</span>
+            <span className="text-xs text-gray-400">{Math.round((done / tasks.length) * 100)}%</span>
+          </div>
+          <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
+            <div className="bg-gray-800 h-2 rounded-full transition-all" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} />
+          </div>
+        </div>
+      )}
+      <div className="space-y-2 mb-4">
+        {loading ? <Spinner /> : tasks.map(task => (
+          <div key={task.id} className={`flex items-center gap-3 p-3 rounded-xl border ${task.status === "Done" ? "bg-gray-50 border-gray-100 opacity-60" : "bg-white border-gray-100"}`}>
+            <button onClick={() => toggleTask(task)}
+              className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${task.status === "Done" ? "bg-gray-800 border-gray-800" : "border-gray-300 hover:border-gray-600"}`}>
+              {task.status === "Done" && <span className="text-white text-xs">✓</span>}
+            </button>
+            <span className={`flex-1 text-sm ${task.status === "Done" ? "line-through text-gray-400" : "text-gray-800"}`}>{task.title}</span>
+            <button onClick={() => deleteTask(task.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2 mb-4">
+        <input value={newTask} onChange={e => setNewTask(e.target.value)} placeholder="Add a task..."
+          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          onKeyDown={e => e.key === "Enter" && addTask(newTask)} />
+        <button onClick={() => addTask(newTask)} className={btnSm}>Add</button>
+      </div>
+      {tasks.length === 0 && (
+        <div>
+          <p className="text-xs text-gray-400 mb-2">Quick add default tasks:</p>
+          <div className="flex flex-wrap gap-2">
+            {DEFAULT_TASKS.map(t => (
+              <button key={t} onClick={() => addTask(t)}
+                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-lg transition-colors">+ {t}</button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── LEAD DETAIL MODAL ────────────────────────────────────────────────────────
+function LeadDetailModal({ lead, db, token, teamMembers, onClose, onUpdate, onConvert }) {
+  const [activeTab, setActiveTab] = useState("pipeline");
+  const [notes, setNotes] = useState(lead.notes || "");
   const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    stage: lead.stage || "Lead",
+    inspection_date: lead.inspection_date ? lead.inspection_date.slice(0, 16) : "",
+    proposal_amount: lead.proposal_amount || "",
+    proposal_status: lead.proposal_status || "Draft",
+  });
+
+  const saveField = async (field, value) => {
+    try { await db.update("leads", lead.id, { [field]: value }); onUpdate({ ...lead, [field]: value }); }
+    catch (e) { Sentry.captureException(e); alert(e.message); }
+  };
 
   const saveNotes = async () => {
     setSaving(true);
-    try {
-      await db.update(type === "lead" ? "leads" : "jobs", item.id, { notes });
-      onUpdate({ ...item, notes });
-    } catch (e) { Sentry.captureException(e); alert(e.message); }
+    try { await db.update("leads", lead.id, { notes }); onUpdate({ ...lead, notes }); }
+    catch (e) { Sentry.captureException(e); }
     finally { setSaving(false); }
   };
 
+  const tabs = ["pipeline", "proposal", "photos", "documents", "notes"];
+
   return (
-    <Modal title={item.name || item.title} onClose={onClose} wide>
-      <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1">
-        {["details", "photos", "documents", "notes"].map(t => (
+    <Modal title={lead.name} onClose={onClose} wide>
+      {/* Stage progress */}
+      <PipelineBar stages={LEAD_STAGES} current={form.stage} onChange={async (s) => {
+        setForm({ ...form, stage: s });
+        await saveField("stage", s);
+      }} />
+
+      {/* Convert to Job button */}
+      {(form.stage === "Sold") && (
+        <button onClick={() => onConvert(lead)}
+          className="w-full mb-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors">
+          🚀 Convert to Job
+        </button>
+      )}
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+        {tabs.map(t => (
           <button key={t} onClick={() => setActiveTab(t)}
-            className={`flex-1 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${activeTab === t ? "bg-gray-800 text-white" : "text-gray-500 hover:text-gray-700"}`}>
-            {t === "photos" ? "📸 Photos" : t === "documents" ? "📄 Docs" : t === "notes" ? "📝 Notes" : "ℹ️ Details"}
+            className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${activeTab === t ? "bg-gray-800 text-white" : "text-gray-500 hover:text-gray-700"}`}>
+            {t === "photos" ? "📸" : t === "documents" ? "📄" : t === "notes" ? "📝" : t === "proposal" ? "💰" : "🔍"} {t}
           </button>
         ))}
       </div>
-      {activeTab === "details" && (
-        <div className="space-y-3">
-          {type === "lead" ? (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Email</p><p className="text-sm font-medium truncate">{item.email || "—"}</p></div>
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Phone</p><p className="text-sm font-medium">{item.phone || "—"}</p></div>
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Source</p><p className="text-sm font-medium">{item.source || "—"}</p></div>
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Status</p><Badge label={item.status} /></div>
-              </div>
-              {item.assigned_name && <div className="bg-gray-800 rounded-xl p-3"><p className="text-xs text-gray-400">Assigned To</p><p className="text-sm font-semibold text-white">👤 {item.assigned_name}</p></div>}
-              {item.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium">{item.address}</p></div>}
-            </>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Customer</p><p className="text-sm font-medium">{item.customer || "—"}</p></div>
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Type</p><p className="text-sm font-medium">{item.type || "—"}</p></div>
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Value</p><p className="text-sm font-medium">${Number(item.value || 0).toLocaleString()}</p></div>
-                <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Status</p><Badge label={item.status} /></div>
-              </div>
-              {item.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium">{item.address}</p></div>}
-              {item.start_date && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Start Date</p><p className="text-sm font-medium">{item.start_date}</p></div>}
-            </>
-          )}
+
+      {activeTab === "pipeline" && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Email</p><p className="text-sm font-medium truncate">{lead.email || "—"}</p></div>
+            <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Phone</p><p className="text-sm font-medium">{lead.phone || "—"}</p></div>
+            <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Source</p><p className="text-sm font-medium">{lead.source || "—"}</p></div>
+            <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Stage</p><Badge label={form.stage} /></div>
+          </div>
+          {lead.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium">{lead.address}</p></div>}
+          {lead.assigned_name && <div className="bg-gray-800 rounded-xl p-3"><p className="text-xs text-gray-400">Assigned To</p><p className="text-sm font-semibold text-white">👤 {lead.assigned_name}</p></div>}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">📅 Inspection Date & Time</label>
+            <input type="datetime-local" value={form.inspection_date}
+              onChange={async e => { setForm({ ...form, inspection_date: e.target.value }); await saveField("inspection_date", e.target.value || null); }}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+          </div>
         </div>
       )}
-      {activeTab === "photos" && <FilePanel relatedId={item.id} relatedType={`${type}-photos`} token={token} db={db} />}
-      {activeTab === "documents" && <FilePanel relatedId={item.id} relatedType={`${type}-docs`} token={token} db={db} />}
+
+      {activeTab === "proposal" && (
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Proposal Amount ($)</label>
+            <input type="number" value={form.proposal_amount}
+              onChange={e => setForm({ ...form, proposal_amount: e.target.value })}
+              onBlur={async () => await saveField("proposal_amount", parseFloat(form.proposal_amount) || null)}
+              placeholder="0.00"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Proposal Status</label>
+            <select value={form.proposal_status}
+              onChange={async e => { setForm({ ...form, proposal_status: e.target.value }); await saveField("proposal_status", e.target.value); }}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white">
+              {["Draft", "Sent", "Accepted", "Declined"].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          {form.proposal_amount && (
+            <div className="bg-gray-800 rounded-xl p-4 text-center">
+              <p className="text-xs text-gray-400 mb-1">Proposal Value</p>
+              <p className="text-3xl font-bold text-white">${Number(form.proposal_amount).toLocaleString()}</p>
+              <Badge label={form.proposal_status} />
+            </div>
+          )}
+          <p className="text-xs text-gray-400">Upload signed proposal documents in the Documents tab.</p>
+        </div>
+      )}
+
+      {activeTab === "photos" && <FilePanel relatedId={lead.id} relatedType="lead-photos" token={token} db={db} />}
+      {activeTab === "documents" && <FilePanel relatedId={lead.id} relatedType="lead-docs" token={token} db={db} />}
       {activeTab === "notes" && (
         <div>
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={8} placeholder="Add notes, comments, or activity..."
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={8} placeholder="Add notes..."
             className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none mb-3" />
           <button onClick={saveNotes} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Saving..." : "Save Notes"}</button>
         </div>
@@ -420,153 +540,128 @@ function DetailModal({ item, type, token, db, onClose, onUpdate }) {
   );
 }
 
-// ─── RECOMMENDATIONS ──────────────────────────────────────────────────────────
-const REC_CATEGORIES = ["Feature Request", "Bug Report", "Process Improvement", "UI Feedback", "Other"];
-const REC_STATUSES = ["Pending", "Under Review", "Implemented", "Dismissed"];
-
-function RecommendationsView({ db, profile }) {
-  const [recs, setRecs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+// ─── JOB DETAIL MODAL ─────────────────────────────────────────────────────────
+function JobDetailModal({ job, db, token, onClose, onUpdate }) {
+  const [activeTab, setActiveTab] = useState("overview");
+  const [notes, setNotes] = useState(job.notes || "");
   const [saving, setSaving] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [filter, setFilter] = useState("All");
-  const isAdmin = profile?.role === "admin";
-  const [form, setForm] = useState({ title: "", category: "Feature Request", message: "", status: "Pending" });
+  const [stage, setStage] = useState(job.stage || "In Production");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try { setRecs(await db.list("recommendations")); }
-    catch (e) { Sentry.captureException(e); console.error(e); }
-    finally { setLoading(false); }
-  }, [db]);
-  useEffect(() => { load(); }, [load]);
+  const saveField = async (field, value) => {
+    try { await db.update("jobs", job.id, { [field]: value }); onUpdate({ ...job, [field]: value }); }
+    catch (e) { Sentry.captureException(e); alert(e.message); }
+  };
 
-  const filtered = filter === "All" ? recs : recs.filter(r => r.status === filter);
-
-  const submit = async () => {
-    if (!form.title || !form.message) return;
+  const saveNotes = async () => {
     setSaving(true);
-    try {
-      const payload = { ...form, submitted_by: profile?.full_name || profile?.email || "Team Member" };
-      await db.insert("recommendations", payload);
-      await sendRecommendationEmail(payload.submitted_by, form.category, `${form.title}\n\n${form.message}`);
-      setForm({ title: "", category: "Feature Request", message: "", status: "Pending" });
-      setShowModal(false);
-      setSubmitted(true);
-      setTimeout(() => setSubmitted(false), 4000);
-      load();
-    } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
+    try { await db.update("jobs", job.id, { notes }); onUpdate({ ...job, notes }); }
+    catch (e) { Sentry.captureException(e); }
     finally { setSaving(false); }
   };
 
-  const updateStatus = async (id, status) => {
-    setRecs(recs.map(r => r.id === id ? { ...r, status } : r));
-    try { await db.update("recommendations", id, { status }); } catch (e) { Sentry.captureException(e); load(); }
-  };
-
-  const deleteRec = async (id) => {
-    if (!confirm("Delete this recommendation?")) return;
-    setRecs(recs.filter(r => r.id !== id));
-    try { await db.delete("recommendations", id); } catch (e) { Sentry.captureException(e); load(); }
-  };
-
-  const catIcon = { "Feature Request": "💡", "Bug Report": "🐛", "Process Improvement": "⚙️", "UI Feedback": "🎨", "Other": "📝" };
+  const tabs = ["overview", "tasks", "photos", "documents", "notes"];
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Recommendations</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Share ideas, feedback, or report issues</p>
-        </div>
-        <button onClick={() => setShowModal(true)} className={btnSm}>+ Submit</button>
+    <Modal title={job.title} onClose={onClose} wide>
+      <PipelineBar stages={JOB_STAGES} current={stage} onChange={async (s) => {
+        setStage(s);
+        await saveField("stage", s);
+      }} />
+
+      <div className="flex gap-1 mb-5 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+        {tabs.map(t => (
+          <button key={t} onClick={() => setActiveTab(t)}
+            className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-colors ${activeTab === t ? "bg-gray-800 text-white" : "text-gray-500 hover:text-gray-700"}`}>
+            {t === "photos" ? "📸" : t === "documents" ? "📄" : t === "notes" ? "📝" : t === "tasks" ? "✅" : "ℹ️"} {t}
+          </button>
+        ))}
       </div>
 
-      {submitted && (
-        <div className="bg-green-50 border border-green-100 rounded-2xl p-4 mb-4 flex items-center gap-3">
-          <span className="text-2xl">✅</span>
+      {activeTab === "overview" && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Customer</p><p className="text-sm font-medium">{job.customer || "—"}</p></div>
+            <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Type</p><p className="text-sm font-medium">{job.type || "—"}</p></div>
+            <div className="bg-gray-800 rounded-xl p-3"><p className="text-xs text-gray-400">Value</p><p className="text-lg font-bold text-white">${Number(job.value || 0).toLocaleString()}</p></div>
+            <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Stage</p><Badge label={stage} /></div>
+          </div>
+          {job.address && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Address</p><p className="text-sm font-medium">{job.address}</p></div>}
+          {job.start_date && <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-400">Start Date</p><p className="text-sm font-medium">{job.start_date}</p></div>}
           <div>
-            <p className="text-sm font-semibold text-green-800">Recommendation submitted!</p>
-            <p className="text-xs text-green-600">Ian has been notified by email.</p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Crew</label>
+            <input defaultValue={job.crew || ""} onBlur={e => saveField("crew", e.target.value)} placeholder="Assign crew members..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
           </div>
-        </div>
-      )}
-
-      {/* Info banner for members -->*/}
-      {!isAdmin && (
-        <div className="bg-gray-800 rounded-2xl p-4 mb-5">
-          <p className="text-sm text-white font-medium">💡 Have an idea or found a bug?</p>
-          <p className="text-xs text-gray-400 mt-0.5">Submit a recommendation and Ian will be notified immediately by email.</p>
-        </div>
-      )}
-
-      {/* Filter tabs - admin only */}
-      {isAdmin && (
-        <div className="flex gap-2 mb-5 flex-wrap">
-          {["All", ...REC_STATUSES].map(s => (
-            <button key={s} onClick={() => setFilter(s)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === s ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-gray-400"}`}>{s}</button>
-          ))}
-        </div>
-      )}
-
-      {loading ? <Spinner /> : (
-        <div className="grid gap-3">
-          {filtered.length === 0 && <p className="text-center text-gray-400 py-12">No recommendations yet</p>}
-          {filtered.map(rec => (
-            <div key={rec.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
-              <div className="flex items-start gap-3">
-                <span className="text-2xl flex-shrink-0">{catIcon[rec.category] || "📝"}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="font-semibold text-gray-900">{rec.title}</span>
-                    <Badge label={rec.status} />
-                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{rec.category}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1 leading-relaxed">{rec.message}</p>
-                  <p className="text-xs text-gray-400 mt-2">Submitted by {rec.submitted_by} · {new Date(rec.created_at).toLocaleDateString()}</p>
-                </div>
-                {isAdmin && (
-                  <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
-                    <select value={rec.status} onChange={e => updateStatus(rec.id, e.target.value)}
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
-                      {REC_STATUSES.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                    <button onClick={() => deleteRec(rec.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {showModal && (
-        <Modal title="Submit a Recommendation" onClose={() => setShowModal(false)}>
-          <div className="bg-gray-50 rounded-xl p-3 mb-4 text-xs text-gray-500">
-            📧 Ian will be notified by email when you submit. Be specific so we can act on it!
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Materials</label>
+            <input defaultValue={job.materials || ""} onBlur={e => saveField("materials", e.target.value)} placeholder="Materials needed..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
           </div>
-          <Field label="Title *" value={form.title} onChange={v => setForm({ ...form, title: v })} />
-          <Field label="Category" value={form.category} onChange={v => setForm({ ...form, category: v })} options={REC_CATEGORIES} />
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Details *</label>
-            <textarea value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} rows={5}
-              placeholder="Describe your idea, issue, or feedback in detail..."
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Permit #</label>
+            <input defaultValue={job.permit || ""} onBlur={e => saveField("permit", e.target.value)} placeholder="Permit number..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Work Order</label>
+            <textarea defaultValue={job.work_order || ""} onBlur={e => saveField("work_order", e.target.value)} rows={3} placeholder="Work order details..."
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none" />
           </div>
-          <button onClick={submit} disabled={saving || !form.title || !form.message}
-            className={`w-full ${btnPrimary}`}>
-            {saving ? "Submitting..." : "Submit Recommendation"}
-          </button>
-        </Modal>
+        </div>
       )}
+
+      {activeTab === "tasks" && <ProductionTasks jobId={job.id} db={db} />}
+      {activeTab === "photos" && <FilePanel relatedId={job.id} relatedType="job-photos" token={token} db={db} />}
+      {activeTab === "documents" && <FilePanel relatedId={job.id} relatedType="job-docs" token={token} db={db} />}
+      {activeTab === "notes" && (
+        <div>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={8} placeholder="Add notes..."
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none mb-3" />
+          <button onClick={saveNotes} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Saving..." : "Save Notes"}</button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ─── PIPELINE BOARD VIEW ──────────────────────────────────────────────────────
+function PipelineView({ leads, onSelectLead, onStageChange }) {
+  return (
+    <div className="overflow-x-auto pb-4">
+      <div className="flex gap-3 min-w-max">
+        {LEAD_STAGES.map(stage => {
+          const stageLeads = leads.filter(l => (l.stage || "Lead") === stage);
+          return (
+            <div key={stage} className="w-64 flex-shrink-0">
+              <div className="flex items-center gap-2 mb-3 px-1">
+                <span>{stageIcon[stage]}</span>
+                <span className="font-semibold text-sm text-gray-700">{stage}</span>
+                <span className="ml-auto bg-gray-200 text-gray-600 text-xs font-bold px-2 py-0.5 rounded-full">{stageLeads.length}</span>
+              </div>
+              <div className="space-y-2">
+                {stageLeads.map(lead => (
+                  <div key={lead.id} onClick={() => onSelectLead(lead)}
+                    className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 cursor-pointer hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-7 h-7 rounded-full bg-gray-800 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{lead.name?.[0] || "?"}</div>
+                      <span className="font-medium text-sm text-gray-900 truncate">{lead.name}</span>
+                    </div>
+                    {lead.proposal_amount && <p className="text-sm font-bold text-gray-800">${Number(lead.proposal_amount).toLocaleString()}</p>}
+                    {lead.inspection_date && <p className="text-xs text-gray-400 mt-1">🔍 {new Date(lead.inspection_date).toLocaleDateString()}</p>}
+                    {lead.assigned_name && <p className="text-xs text-gray-400">👤 {lead.assigned_name}</p>}
+                  </div>
+                ))}
+                {stageLeads.length === 0 && <div className="text-center py-8 text-gray-300 text-xs border-2 border-dashed border-gray-100 rounded-xl">No leads</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 // ─── LEADS ───────────────────────────────────────────────────────────────────
-const LEAD_STATUSES = ["New", "Contacted", "Qualified", "Lost"];
 function LeadsView({ db, token, profile }) {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -575,7 +670,9 @@ function LeadsView({ db, token, profile }) {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [teamMembers, setTeamMembers] = useState([]);
-  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", source: "Referral", status: "New", notes: "", assigned_to: "", assigned_name: "" });
+  const [view, setView] = useState("list");
+  const [convertLead, setConvertLead] = useState(null);
+  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", source: "Referral", stage: "Lead", notes: "", assigned_to: "", assigned_name: "" });
   const isAdmin = profile?.role === "admin";
 
   const load = useCallback(async () => {
@@ -601,22 +698,35 @@ function LeadsView({ db, token, profile }) {
       if (!payload.assigned_to) { delete payload.assigned_to; delete payload.assigned_name; }
       const [created] = await db.insert("leads", payload);
       setLeads([created, ...leads]);
-      setForm({ name: "", phone: "", email: "", address: "", source: "Referral", status: "New", notes: "", assigned_to: "", assigned_name: "" });
+      setForm({ name: "", phone: "", email: "", address: "", source: "Referral", stage: "Lead", notes: "", assigned_to: "", assigned_name: "" });
       setShowModal(false);
     } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
     finally { setSaving(false); }
   };
 
-  const assignLead = async (lead, memberId) => {
-    const member = teamMembers.find(m => m.id === memberId);
-    const update = { assigned_to: memberId || null, assigned_name: member?.full_name || member?.email || null };
-    setLeads(leads.map(l => l.id === lead.id ? { ...l, ...update } : l));
-    try { await db.update("leads", lead.id, update); } catch (e) { Sentry.captureException(e); load(); }
-  };
-
-  const updateStatus = async (id, status) => {
-    setLeads(leads.map(l => l.id === id ? { ...l, status } : l));
-    try { await db.update("leads", id, { status }); } catch (e) { Sentry.captureException(e); load(); }
+  const handleConvert = async (lead) => {
+    // Convert lead to job
+    try {
+      const [newJob] = await db.insert("jobs", {
+        title: `${lead.name} - ${lead.source || "Job"}`,
+        customer: lead.name,
+        address: lead.address || "",
+        status: "In Progress",
+        stage: "In Production",
+        type: "Other",
+        value: lead.proposal_amount || 0,
+        notes: lead.notes || "",
+      });
+      // Auto-create default production tasks
+      for (const task of DEFAULT_TASKS) {
+        await db.insert("pipeline_tasks", { job_id: newJob.id, title: task, status: "Pending" });
+      }
+      // Update lead stage to Sold
+      await db.update("leads", lead.id, { stage: "Sold" });
+      setLeads(leads.map(l => l.id === lead.id ? { ...l, stage: "Sold" } : l));
+      setSelected(null);
+      alert(`✅ Lead converted to job! "${newJob.title}" has been created with ${DEFAULT_TASKS.length} production tasks.`);
+    } catch (e) { Sentry.captureException(e); alert("Error converting: " + e.message); }
   };
 
   const deleteLead = async (id) => {
@@ -627,13 +737,23 @@ function LeadsView({ db, token, profile }) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div><h2 className="text-2xl font-bold text-gray-900">Leads & Contacts</h2><p className="text-sm text-gray-500 mt-0.5">{leads.length} {isAdmin ? "total" : "assigned to you"}</p></div>
+      <div className="flex items-center justify-between mb-4">
+        <div><h2 className="text-2xl font-bold text-gray-900">Pipeline</h2><p className="text-sm text-gray-500 mt-0.5">{leads.length} leads</p></div>
         <button onClick={() => setShowModal(true)} className={btnSm}>+ Add Lead</button>
       </div>
-      <input placeholder="Search leads..." value={search} onChange={e => setSearch(e.target.value)}
-        className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white shadow-sm mb-4" />
-      {loading ? <Spinner /> : (
+
+      <div className="flex gap-2 mb-4">
+        <input placeholder="Search leads..." value={search} onChange={e => setSearch(e.target.value)}
+          className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 bg-white shadow-sm" />
+        <button onClick={() => setView(view === "list" ? "board" : "list")}
+          className="border border-gray-200 bg-white rounded-xl px-4 py-2.5 text-sm font-medium text-gray-600 hover:border-gray-400 transition-colors">
+          {view === "list" ? "📋 Board" : "☰ List"}
+        </button>
+      </div>
+
+      {loading ? <Spinner /> : view === "board" ? (
+        <PipelineView leads={filtered} onSelectLead={setSelected} onStageChange={() => load()} />
+      ) : (
         <div className="grid gap-3">
           {filtered.length === 0 && <p className="text-center text-gray-400 py-12">No leads yet</p>}
           {filtered.map(lead => (
@@ -641,19 +761,23 @@ function LeadsView({ db, token, profile }) {
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white font-bold flex-shrink-0">{lead.name?.[0] || "?"}</div>
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelected(lead)}>
-                  <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-gray-900">{lead.name}</span><Badge label={lead.status} /></div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900">{lead.name}</span>
+                    <Badge label={lead.stage || "Lead"} />
+                  </div>
                   <p className="text-sm text-gray-500 mt-0.5">{lead.email}{lead.phone ? ` · ${lead.phone}` : ""}</p>
-                  {lead.address && <p className="text-xs text-gray-400 mt-0.5 truncate">{lead.address}</p>}
+                  {lead.inspection_date && <p className="text-xs text-gray-400 mt-0.5">🔍 Inspection: {new Date(lead.inspection_date).toLocaleDateString()}</p>}
+                  {lead.proposal_amount && <p className="text-xs font-semibold text-gray-700 mt-0.5">💰 ${Number(lead.proposal_amount).toLocaleString()} proposal</p>}
                   {lead.assigned_name && <p className="text-xs mt-1 text-gray-600 font-medium">👤 {lead.assigned_name}</p>}
                 </div>
                 <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
-                  <select value={lead.status} onChange={e => updateStatus(lead.id, e.target.value)}
-                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
-                    {LEAD_STATUSES.map(s => <option key={s}>{s}</option>)}
-                  </select>
                   {isAdmin && (
-                    <select value={lead.assigned_to || ""} onChange={e => assignLead(lead, e.target.value)}
-                      className="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-gray-50 text-gray-700 focus:outline-none max-w-[130px]">
+                    <select value={lead.assigned_to || ""} onChange={async e => {
+                      const member = teamMembers.find(m => m.id === e.target.value);
+                      const update = { assigned_to: e.target.value || null, assigned_name: member?.full_name || member?.email || null };
+                      setLeads(leads.map(l => l.id === lead.id ? { ...l, ...update } : l));
+                      try { await db.update("leads", lead.id, update); } catch (err) { Sentry.captureException(err); }
+                    }} className="text-xs border border-gray-300 rounded-lg px-2 py-1 bg-gray-50 text-gray-700 focus:outline-none max-w-[130px]">
                       <option value="">Unassigned</option>
                       {teamMembers.map(m => <option key={m.id} value={m.id}>{m.full_name || m.email}</option>)}
                     </select>
@@ -668,6 +792,7 @@ function LeadsView({ db, token, profile }) {
           ))}
         </div>
       )}
+
       {showModal && (
         <Modal title="Add New Lead" onClose={() => setShowModal(false)}>
           <Field label="Full Name *" value={form.name} onChange={v => setForm({ ...form, name: v })} />
@@ -675,10 +800,10 @@ function LeadsView({ db, token, profile }) {
           <Field label="Email" value={form.email} onChange={v => setForm({ ...form, email: v })} />
           <Field label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} />
           <Field label="Source" value={form.source} onChange={v => setForm({ ...form, source: v })} options={["Referral", "Website", "Door Knock", "Social Media", "Other"]} />
-          <Field label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })} options={LEAD_STATUSES} />
+          <Field label="Stage" value={form.stage} onChange={v => setForm({ ...form, stage: v })} options={LEAD_STAGES} />
           {isAdmin && (
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Assign To Team Member</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Assign To</label>
               <select value={form.assigned_to} onChange={e => {
                 const member = teamMembers.find(m => m.id === e.target.value);
                 setForm({ ...form, assigned_to: e.target.value, assigned_name: member?.full_name || member?.email || "" });
@@ -692,17 +817,18 @@ function LeadsView({ db, token, profile }) {
           <button onClick={addLead} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Saving..." : "Save Lead"}</button>
         </Modal>
       )}
+
       {selected && (
-        <DetailModal item={selected} type="lead" token={token} db={db}
+        <LeadDetailModal lead={selected} db={db} token={token} teamMembers={teamMembers}
           onClose={() => setSelected(null)}
-          onUpdate={updated => { setLeads(leads.map(l => l.id === updated.id ? updated : l)); setSelected(updated); }} />
+          onUpdate={updated => { setLeads(leads.map(l => l.id === updated.id ? updated : l)); setSelected(updated); }}
+          onConvert={handleConvert} />
       )}
     </div>
   );
 }
 
 // ─── JOBS ─────────────────────────────────────────────────────────────────────
-const JOB_STATUSES = ["Pending", "Scheduled", "In Progress", "Completed", "Cancelled"];
 function JobsView({ db, token }) {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -710,7 +836,7 @@ function JobsView({ db, token }) {
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState("All");
-  const [form, setForm] = useState({ title: "", customer: "", address: "", status: "Pending", type: "Roofing", start_date: "", value: "", notes: "" });
+  const [form, setForm] = useState({ title: "", customer: "", address: "", stage: "In Production", type: "Roofing", start_date: "", value: "", notes: "" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -720,24 +846,20 @@ function JobsView({ db, token }) {
   }, [db]);
   useEffect(() => { load(); }, [load]);
 
-  const filtered = filter === "All" ? jobs : jobs.filter(j => j.status === filter);
+  const allStages = ["All", ...JOB_STAGES];
+  const filtered = filter === "All" ? jobs : jobs.filter(j => (j.stage || "In Production") === filter);
   const typeIcon = { Roofing: "🏠", Remodeling: "🔨", Siding: "🪵", Windows: "🪟", Other: "🔧" };
 
   const addJob = async () => {
     if (!form.title) return;
     setSaving(true);
     try {
-      const [created] = await db.insert("jobs", { ...form, value: parseFloat(form.value) || 0 });
+      const [created] = await db.insert("jobs", { ...form, value: parseFloat(form.value) || 0, status: "In Progress" });
       setJobs([created, ...jobs]);
-      setForm({ title: "", customer: "", address: "", status: "Pending", type: "Roofing", start_date: "", value: "", notes: "" });
+      setForm({ title: "", customer: "", address: "", stage: "In Production", type: "Roofing", start_date: "", value: "", notes: "" });
       setShowModal(false);
     } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
     finally { setSaving(false); }
-  };
-
-  const updateStatus = async (id, status) => {
-    setJobs(jobs.map(j => j.id === id ? { ...j, status } : j));
-    try { await db.update("jobs", id, { status }); } catch (e) { Sentry.captureException(e); load(); }
   };
 
   const deleteJob = async (id) => {
@@ -753,7 +875,7 @@ function JobsView({ db, token }) {
         <button onClick={() => setShowModal(true)} className={btnSm}>+ New Job</button>
       </div>
       <div className="flex gap-2 mb-5 flex-wrap">
-        {["All", ...JOB_STATUSES].map(s => (
+        {allStages.map(s => (
           <button key={s} onClick={() => setFilter(s)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === s ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600 hover:border-gray-400"}`}>{s}</button>
         ))}
@@ -766,15 +888,15 @@ function JobsView({ db, token }) {
               <div className="flex items-start gap-3">
                 <span className="text-2xl flex-shrink-0">{typeIcon[job.type] || "🔧"}</span>
                 <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setSelected(job)}>
-                  <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-gray-900">{job.title}</span><Badge label={job.status} /></div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-gray-900">{job.title}</span>
+                    <Badge label={job.stage || "In Production"} />
+                  </div>
                   <p className="text-sm text-gray-500 mt-0.5">{job.customer}{job.address ? ` · ${job.address}` : ""}</p>
                   <p className="text-sm font-bold text-gray-900 mt-0.5">${Number(job.value || 0).toLocaleString()}</p>
+                  {job.crew && <p className="text-xs text-gray-400 mt-0.5">👷 {job.crew}</p>}
                 </div>
                 <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
-                  <select value={job.status} onChange={e => updateStatus(job.id, e.target.value)}
-                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none">
-                    {JOB_STATUSES.map(s => <option key={s}>{s}</option>)}
-                  </select>
                   <div className="flex gap-2">
                     <button onClick={() => setSelected(job)} className="text-xs text-gray-500 hover:text-gray-800">View</button>
                     <button onClick={() => deleteJob(job.id)} className="text-xs text-red-400 hover:text-red-600">Delete</button>
@@ -791,7 +913,7 @@ function JobsView({ db, token }) {
           <Field label="Customer Name" value={form.customer} onChange={v => setForm({ ...form, customer: v })} />
           <Field label="Address" value={form.address} onChange={v => setForm({ ...form, address: v })} />
           <Field label="Job Type" value={form.type} onChange={v => setForm({ ...form, type: v })} options={["Roofing", "Remodeling", "Siding", "Windows", "Other"]} />
-          <Field label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })} options={JOB_STATUSES} />
+          <Field label="Stage" value={form.stage} onChange={v => setForm({ ...form, stage: v })} options={JOB_STAGES} />
           <Field label="Start Date" value={form.start_date} onChange={v => setForm({ ...form, start_date: v })} type="date" />
           <Field label="Contract Value ($)" value={form.value} onChange={v => setForm({ ...form, value: v })} type="number" />
           <Field label="Notes" value={form.notes} onChange={v => setForm({ ...form, notes: v })} type="textarea" />
@@ -799,7 +921,7 @@ function JobsView({ db, token }) {
         </Modal>
       )}
       {selected && (
-        <DetailModal item={selected} type="job" token={token} db={db}
+        <JobDetailModal job={selected} db={db} token={token}
           onClose={() => setSelected(null)}
           onUpdate={updated => { setJobs(jobs.map(j => j.id === updated.id ? updated : j)); setSelected(updated); }} />
       )}
@@ -953,7 +1075,7 @@ function TasksView({ db }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <div><h2 className="text-2xl font-bold text-gray-900">Tasks & Calendar</h2><p className="text-sm text-gray-500 mt-0.5">{pendingCount} pending · {doneCount} done</p></div>
+        <div><h2 className="text-2xl font-bold text-gray-900">Tasks</h2><p className="text-sm text-gray-500 mt-0.5">{pendingCount} pending · {doneCount} done</p></div>
         <button onClick={() => setShowModal(true)} className={btnSm}>+ Add Task</button>
       </div>
       <div className="flex gap-2 mb-5">
@@ -1010,15 +1132,19 @@ function Dashboard({ db, setTab }) {
   const [stats, setStats] = useState({ leads: 0, jobs: 0, pipeline: 0, tasks: 0 });
   const [recentJobs, setRecentJobs] = useState([]);
   const [upcomingTasks, setUpcomingTasks] = useState([]);
+  const [stageBreakdown, setStageBreakdown] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
         const [leads, jobs, tasks] = await Promise.all([db.list("leads"), db.list("jobs"), db.list("tasks")]);
-        setStats({ leads: leads.length, jobs: jobs.length, pipeline: jobs.reduce((s, j) => s + Number(j.value || 0), 0), tasks: tasks.filter(t => t.status === "Pending").length });
+        const pipeline = leads.filter(l => l.proposal_amount).reduce((s, l) => s + Number(l.proposal_amount || 0), 0);
+        setStats({ leads: leads.length, jobs: jobs.length, pipeline, tasks: tasks.filter(t => t.status === "Pending").length });
         setRecentJobs(jobs.slice(0, 3));
         setUpcomingTasks(tasks.filter(t => t.status === "Pending").slice(0, 4));
+        const breakdown = LEAD_STAGES.map(s => ({ stage: s, count: leads.filter(l => (l.stage || "Lead") === s).length }));
+        setStageBreakdown(breakdown);
       } catch (e) { Sentry.captureException(e); }
       finally { setLoading(false); }
     }
@@ -1028,7 +1154,7 @@ function Dashboard({ db, setTab }) {
   const cards = [
     { label: "Active Leads", value: stats.leads, icon: "👥", color: "bg-gray-800", text: "text-white", sub: "text-gray-400", tab: "leads" },
     { label: "Open Jobs", value: stats.jobs, icon: "🏗️", color: "bg-gray-700", text: "text-white", sub: "text-gray-400", tab: "jobs" },
-    { label: "Pipeline", value: `$${stats.pipeline.toLocaleString()}`, icon: "💰", color: "bg-gray-600", text: "text-white", sub: "text-gray-300", tab: "estimates" },
+    { label: "Proposal Pipeline", value: `$${stats.pipeline.toLocaleString()}`, icon: "💰", color: "bg-gray-600", text: "text-white", sub: "text-gray-300", tab: "leads" },
     { label: "Tasks Due", value: stats.tasks, icon: "✅", color: "bg-gray-500", text: "text-white", sub: "text-gray-200", tab: "tasks" },
   ];
 
@@ -1046,6 +1172,24 @@ function Dashboard({ db, setTab }) {
               </button>
             ))}
           </div>
+
+          {/* Pipeline stage breakdown */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
+            <h3 className="font-bold text-gray-900 mb-4">Pipeline Breakdown</h3>
+            <div className="space-y-2">
+              {stageBreakdown.map(({ stage, count }) => (
+                <div key={stage} className="flex items-center gap-3">
+                  <span className="text-sm w-6">{stageIcon[stage]}</span>
+                  <span className="text-sm text-gray-600 w-32">{stage}</span>
+                  <div className="flex-1 bg-gray-100 rounded-full h-2">
+                    <div className="bg-gray-800 h-2 rounded-full transition-all" style={{ width: `${stats.leads ? (count / stats.leads) * 100 : 0}%` }} />
+                  </div>
+                  <span className="text-sm font-bold text-gray-700 w-6 text-right">{count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 mb-4">
             <h3 className="font-bold text-gray-900 mb-3">Recent Jobs</h3>
             {recentJobs.length === 0 ? <p className="text-sm text-gray-400">No jobs yet</p> : (
@@ -1053,12 +1197,13 @@ function Dashboard({ db, setTab }) {
                 {recentJobs.map(job => (
                   <div key={job.id} className="flex items-center justify-between gap-3">
                     <div className="min-w-0"><p className="text-sm font-medium text-gray-800 truncate">{job.title}</p><p className="text-xs text-gray-400">{job.customer}</p></div>
-                    <div className="flex items-center gap-2 flex-shrink-0"><span className="text-sm font-semibold text-gray-700">${Number(job.value || 0).toLocaleString()}</span><Badge label={job.status} /></div>
+                    <div className="flex items-center gap-2 flex-shrink-0"><span className="text-sm font-semibold text-gray-700">${Number(job.value || 0).toLocaleString()}</span><Badge label={job.stage || "In Production"} /></div>
                   </div>
                 ))}
               </div>
             )}
           </div>
+
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <h3 className="font-bold text-gray-900 mb-3">Pending Tasks</h3>
             {upcomingTasks.length === 0 ? <p className="text-sm text-gray-400">No pending tasks</p> : (
@@ -1079,7 +1224,180 @@ function Dashboard({ db, setTab }) {
   );
 }
 
+// ─── RECOMMENDATIONS ──────────────────────────────────────────────────────────
+const REC_CATEGORIES = ["Feature Request", "Bug Report", "Process Improvement", "UI Feedback", "Other"];
+const REC_STATUSES = ["Pending", "Under Review", "Implemented", "Dismissed"];
+
+function RecommendationsView({ db, profile }) {
+  const [recs, setRecs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [filter, setFilter] = useState("All");
+  const isAdmin = profile?.role === "admin";
+  const [form, setForm] = useState({ title: "", category: "Feature Request", message: "", status: "Pending" });
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setRecs(await db.list("recommendations")); }
+    catch (e) { Sentry.captureException(e); }
+    finally { setLoading(false); }
+  }, [db]);
+  useEffect(() => { load(); }, [load]);
+
+  const filtered = filter === "All" ? recs : recs.filter(r => r.status === filter);
+
+  const submit = async () => {
+    if (!form.title || !form.message) return;
+    setSaving(true);
+    try {
+      const payload = { ...form, submitted_by: profile?.full_name || profile?.email || "Team Member" };
+      await db.insert("recommendations", payload);
+      await sendRecommendationEmail(payload.submitted_by, form.category, `${form.title}\n\n${form.message}`);
+      setForm({ title: "", category: "Feature Request", message: "", status: "Pending" });
+      setShowModal(false); setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 4000);
+      load();
+    } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
+    finally { setSaving(false); }
+  };
+
+  const updateStatus = async (id, status) => {
+    setRecs(recs.map(r => r.id === id ? { ...r, status } : r));
+    try { await db.update("recommendations", id, { status }); } catch (e) { Sentry.captureException(e); load(); }
+  };
+
+  const catIcon = { "Feature Request": "💡", "Bug Report": "🐛", "Process Improvement": "⚙️", "UI Feedback": "🎨", "Other": "📝" };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div><h2 className="text-2xl font-bold text-gray-900">Recommendations</h2><p className="text-sm text-gray-500 mt-0.5">Share ideas or report issues</p></div>
+        <button onClick={() => setShowModal(true)} className={btnSm}>+ Submit</button>
+      </div>
+      {submitted && (
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-4 mb-4 flex items-center gap-3">
+          <span className="text-2xl">✅</span>
+          <div><p className="text-sm font-semibold text-green-800">Submitted!</p><p className="text-xs text-green-600">Ian has been notified by email.</p></div>
+        </div>
+      )}
+      {isAdmin && (
+        <div className="flex gap-2 mb-5 flex-wrap">
+          {["All", ...REC_STATUSES].map(s => (
+            <button key={s} onClick={() => setFilter(s)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${filter === s ? "bg-gray-800 text-white" : "bg-white border border-gray-200 text-gray-600"}`}>{s}</button>
+          ))}
+        </div>
+      )}
+      {loading ? <Spinner /> : (
+        <div className="grid gap-3">
+          {filtered.length === 0 && <p className="text-center text-gray-400 py-12">No recommendations yet</p>}
+          {filtered.map(rec => (
+            <div key={rec.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-start gap-3">
+                <span className="text-2xl flex-shrink-0">{catIcon[rec.category] || "📝"}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="font-semibold text-gray-900">{rec.title}</span>
+                    <Badge label={rec.status} />
+                    <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{rec.category}</span>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">{rec.message}</p>
+                  <p className="text-xs text-gray-400 mt-2">By {rec.submitted_by} · {new Date(rec.created_at).toLocaleDateString()}</p>
+                </div>
+                {isAdmin && (
+                  <select value={rec.status} onChange={e => updateStatus(rec.id, e.target.value)}
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none flex-shrink-0">
+                    {REC_STATUSES.map(s => <option key={s}>{s}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {showModal && (
+        <Modal title="Submit a Recommendation" onClose={() => setShowModal(false)}>
+          <Field label="Title *" value={form.title} onChange={v => setForm({ ...form, title: v })} />
+          <Field label="Category" value={form.category} onChange={v => setForm({ ...form, category: v })} options={REC_CATEGORIES} />
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Details *</label>
+            <textarea value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} rows={5} placeholder="Describe your idea or issue..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none" />
+          </div>
+          <button onClick={submit} disabled={saving || !form.title || !form.message} className={`w-full ${btnPrimary}`}>
+            {saving ? "Submitting..." : "Submit Recommendation"}
+          </button>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
+function AccessRequests() {
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/access_requests?select=*&order=created_at.desc`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+      });
+      setRequests(await res.json());
+    } catch (e) { Sentry.captureException(e); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const updateStatus = async (id, status) => {
+    setRequests(requests.map(r => r.id === id ? { ...r, status } : r));
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/access_requests?id=eq.${id}`, {
+        method: "PATCH",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+    } catch (e) { Sentry.captureException(e); load(); }
+  };
+
+  const pending = requests.filter(r => r.status === "Pending");
+  return (
+    <div className="mt-8">
+      <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+        🔑 Access Requests
+        {pending.length > 0 && <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pending.length}</span>}
+      </h3>
+      {loading ? <Spinner /> : requests.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-8">No access requests yet</p>
+      ) : (
+        <div className="grid gap-3">
+          {requests.map(req => (
+            <div key={req.id} className={`bg-white rounded-2xl border shadow-sm p-4 ${req.status === "Pending" ? "border-gray-300" : "border-gray-100 opacity-70"}`}>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white font-bold flex-shrink-0">{req.full_name?.[0] || "?"}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap"><span className="font-semibold text-gray-900">{req.full_name}</span><Badge label={req.status} /></div>
+                  <p className="text-sm text-gray-500 mt-0.5">{req.email}</p>
+                  <p className="text-sm text-gray-600 mt-1 italic">"{req.reason}"</p>
+                </div>
+                {req.status === "Pending" && (
+                  <div className="flex flex-col gap-2 flex-shrink-0">
+                    <button onClick={() => updateStatus(req.id, "Approved")} className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700">Approve</button>
+                    <button onClick={() => updateStatus(req.id, "Denied")} className="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100">Deny</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminPanel({ db, currentUser }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1131,7 +1449,7 @@ function AdminPanel({ db, currentUser }) {
       </div>
       <div className="bg-gray-800 rounded-2xl p-4 mb-5">
         <p className="text-sm text-white font-medium">👑 Admin Controls</p>
-        <p className="text-xs text-gray-400 mt-0.5">You can see all leads. Team members only see leads assigned to them.</p>
+        <p className="text-xs text-gray-400 mt-0.5">You see all leads. Members only see leads assigned to them.</p>
       </div>
       {loading ? <Spinner /> : (
         <div className="grid gap-3">
@@ -1158,6 +1476,7 @@ function AdminPanel({ db, currentUser }) {
           ))}
         </div>
       )}
+      <AccessRequests />
       {showInvite && (
         <Modal title="Add New User" onClose={() => { setShowInvite(false); setInviteMsg(""); }}>
           {inviteMsg && <div className={`rounded-xl px-4 py-3 mb-4 text-sm ${inviteMsg.startsWith("✅") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>{inviteMsg}</div>}
@@ -1167,83 +1486,6 @@ function AdminPanel({ db, currentUser }) {
           <Field label="Role" value={inviteRole} onChange={setInviteRole} options={["member", "admin"]} />
           <button onClick={createUser} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Creating..." : "Create User"}</button>
         </Modal>
-      )}
-      <AccessRequests db={db} />
-    </div>
-  );
-}
-
-// ─── ACCESS REQUESTS ──────────────────────────────────────────────────────────
-function AccessRequests({ db }) {
-  const [requests, setRequests] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/access_requests?select=*&order=created_at.desc`, {
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
-      });
-      setRequests(await res.json());
-    } catch (e) { Sentry.captureException(e); }
-    finally { setLoading(false); }
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  const updateStatus = async (id, status) => {
-    setRequests(requests.map(r => r.id === id ? { ...r, status } : r));
-    try {
-      await fetch(`${SUPABASE_URL}/rest/v1/access_requests?id=eq.${id}`, {
-        method: "PATCH",
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-    } catch (e) { Sentry.captureException(e); load(); }
-  };
-
-  const pending = requests.filter(r => r.status === "Pending");
-
-  return (
-    <div className="mt-8">
-      <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-        🔑 Access Requests
-        {pending.length > 0 && <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pending.length}</span>}
-      </h3>
-      {loading ? <Spinner /> : requests.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-8">No access requests yet</p>
-      ) : (
-        <div className="grid gap-3">
-          {requests.map(req => (
-            <div key={req.id} className={`bg-white rounded-2xl border shadow-sm p-4 ${req.status === "Pending" ? "border-gray-300" : "border-gray-100 opacity-70"}`}>
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white font-bold flex-shrink-0">
-                  {req.full_name?.[0] || "?"}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-gray-900">{req.full_name}</span>
-                    <Badge label={req.status} />
-                  </div>
-                  <p className="text-sm text-gray-500 mt-0.5">{req.email}</p>
-                  <p className="text-sm text-gray-600 mt-1 italic">"{req.reason}"</p>
-                  <p className="text-xs text-gray-400 mt-1">{new Date(req.created_at).toLocaleDateString()}</p>
-                </div>
-                {req.status === "Pending" && (
-                  <div className="flex flex-col gap-2 flex-shrink-0">
-                    <button onClick={() => updateStatus(req.id, "Approved")}
-                      className="text-xs bg-gray-800 text-white px-3 py-1.5 rounded-lg hover:bg-gray-700 transition-colors">
-                      Approve
-                    </button>
-                    <button onClick={() => updateStatus(req.id, "Denied")}
-                      className="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors">
-                      Deny
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
       )}
     </div>
   );
@@ -1293,17 +1535,17 @@ function RequestAccessScreen({ onBack }) {
           {error && <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-4 text-sm text-red-600">⚠️ {error}</div>}
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
-            <input value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} placeholder="John Smith"
+            <input value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} placeholder="John Smith"
               className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
           </div>
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-            <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="you@example.com"
+            <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="you@example.com"
               className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
           </div>
           <div className="mb-6">
             <label className="block text-sm font-medium text-gray-700 mb-1">Why do you need access? *</label>
-            <textarea value={form.reason} onChange={e => setForm({...form, reason: e.target.value})} rows={3} placeholder="I'm a team member at EJI..."
+            <textarea value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} rows={3} placeholder="I'm a team member at..."
               className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none" />
           </div>
           <button onClick={submit} disabled={saving} className={`w-full ${btnPrimary} mb-3`}>{saving ? "Submitting..." : "Submit Request"}</button>
@@ -1379,7 +1621,7 @@ function LoginScreen({ onLogin }) {
 // ─── APP ──────────────────────────────────────────────────────────────────────
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: "⊞" },
-  { id: "leads", label: "Leads", icon: "👥" },
+  { id: "leads", label: "Pipeline", icon: "🔄" },
   { id: "jobs", label: "Jobs", icon: "🏗️" },
   { id: "estimates", label: "Estimates", icon: "📄" },
   { id: "tasks", label: "Tasks", icon: "✅" },
@@ -1397,8 +1639,7 @@ export default function App() {
 
   const handleLogin = ({ session, profile }) => {
     Sentry.setUser({ email: session.user.email, id: session.user.id });
-    setAuth({ session, profile });
-    setTab("dashboard");
+    setAuth({ session, profile }); setTab("dashboard");
   };
   const handleLogout = async () => {
     try { await signOut(auth.session.access_token); } catch {}
