@@ -47,8 +47,25 @@ async function sendEmail(subject, html) {
 }
 
 async function sendAccessRequestEmail(full_name, email, reason) {
-  await sendEmail(`🔑 New Access Request from ${full_name}`,
-    `<div style="font-family:sans-serif;padding:24px;"><h2>New Access Request</h2><p><b>Name:</b> ${full_name}</p><p><b>Email:</b> ${email}</p><p><b>Reason:</b> ${reason}</p></div>`);
+  await sendEmail(`🔔 New Access Request from ${full_name}`,
+    `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+      <div style="background:#1C1F22;border-radius:12px;padding:24px;margin-bottom:24px;">
+        <h1 style="color:white;margin:0;font-size:22px;letter-spacing:2px;">SIMPLICITY</h1>
+        <p style="color:#6B7280;margin:4px 0 0;font-size:13px;">CRM</p>
+      </div>
+      <h2 style="color:#111827;">New Access Request</h2>
+      <p style="color:#6B7280;font-size:14px;">Someone wants to join Simplicity CRM. Log in to approve or deny.</p>
+      <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:20px;margin:16px 0;">
+        <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Name</p>
+        <p style="margin:0 0 16px;color:#111827;font-weight:600;">${full_name}</p>
+        <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Email</p>
+        <p style="margin:0 0 16px;color:#111827;">${email}</p>
+        <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Reason</p>
+        <p style="margin:0;color:#111827;">${reason}</p>
+      </div>
+      <a href="https://build-com-topaz.vercel.app" style="display:block;background:#1C1F22;color:white;text-align:center;padding:14px;border-radius:10px;text-decoration:none;font-weight:700;margin-top:16px;">Open Admin Panel →</a>
+      <p style="color:#9CA3AF;font-size:12px;text-align:center;margin-top:24px;">Simplicity CRM · Sent automatically</p>
+    </div>`);
 }
 
 async function sendRecommendationEmail(from_name, category, message) {
@@ -1419,25 +1436,26 @@ function AccessRequests({ onBadgeUpdate }) {
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({ status: "Approved", auto_password: password }),
       });
-      // 5. Email them their credentials
+      // 5. Email YOU (admin) with the new user credentials to share with them
       await sendEmail(
-        `✅ Your Simplicity CRM Access Has Been Approved`,
+        `🔑 New Account Created for ${req.full_name}`,
         `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
           <div style="background:#1C1F22;border-radius:12px;padding:24px;margin-bottom:24px;">
             <h1 style="color:white;margin:0;font-size:22px;letter-spacing:2px;">SIMPLICITY</h1>
             <p style="color:#6B7280;margin:4px 0 0;font-size:13px;">CRM</p>
           </div>
-          <h2 style="color:#111827;">Welcome, ${req.full_name}! 🎉</h2>
-          <p style="color:#6B7280;">Your access request has been approved. Here are your login credentials:</p>
+          <h2 style="color:#111827;">✅ Account Created — Share These Credentials</h2>
+          <p style="color:#6B7280;font-size:14px;">You approved <strong>${req.full_name}</strong>. Send them the following login details via text or email.</p>
           <div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:20px;margin:16px 0;">
-            <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Login URL</p>
-            <p style="margin:0 0 16px;color:#111827;font-weight:600;">build-com-topaz.vercel.app</p>
-            <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Email</p>
+            <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Their Name</p>
+            <p style="margin:0 0 16px;color:#111827;font-weight:600;">${req.full_name}</p>
+            <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Their Email</p>
             <p style="margin:0 0 16px;color:#111827;font-weight:600;">${req.email}</p>
+            <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">App URL</p>
+            <p style="margin:0 0 16px;color:#111827;font-weight:600;">build-com-topaz.vercel.app</p>
             <p style="margin:0 0 8px;color:#6B7280;font-size:12px;text-transform:uppercase;">Temporary Password</p>
-            <p style="margin:0;color:#111827;font-weight:700;font-size:18px;letter-spacing:2px;">${password}</p>
+            <p style="margin:0;color:#1C1F22;font-weight:700;font-size:24px;letter-spacing:4px;background:#E5E7EB;padding:12px;border-radius:8px;text-align:center;">${password}</p>
           </div>
-          <p style="color:#6B7280;font-size:13px;">Please change your password after your first login.</p>
           <p style="color:#9CA3AF;font-size:12px;text-align:center;margin-top:24px;">Simplicity CRM · Sent automatically</p>
         </div>`
       );
