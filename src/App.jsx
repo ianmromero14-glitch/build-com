@@ -979,6 +979,119 @@ function JobsView({ db, token }) {
   );
 }
 
+// ─── E-SIGNATURE ──────────────────────────────────────────────────────────────
+function ESignatureModal({ estimate, db, onClose, onSigned }) {
+  const canvasRef = useRef(null);
+  const [drawing, setDrawing] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState("");
+
+  const getPos = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const startDraw = (e) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const pos = getPos(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    setDrawing(true);
+    setHasSignature(true);
+  };
+
+  const draw = (e) => {
+    e.preventDefault();
+    if (!drawing) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const pos = getPos(e, canvas);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#1C1F22";
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  };
+
+  const endDraw = () => setDrawing(false);
+
+  const clear = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasSignature(false);
+  };
+
+  const save = async () => {
+    if (!hasSignature || !name) { alert("Please sign and enter your name"); return; }
+    setSaving(true);
+    try {
+      const canvas = canvasRef.current;
+      const signatureData = canvas.toDataURL("image/png");
+      await db.insert("signatures", {
+        estimate_id: estimate.id,
+        customer_name: name,
+        signature_data: signatureData,
+      });
+      await db.update("estimates", estimate.id, { status: "Approved", signature_url: signatureData });
+      onSigned();
+      onClose();
+    } catch (e) { Sentry.captureException(e); alert("Error saving signature: " + e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+          <h3 className="text-base font-bold text-gray-900">✍️ Sign Estimate</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+        </div>
+        <div className="px-6 py-5">
+          {/* Estimate summary */}
+          <div className="bg-gray-50 rounded-xl p-4 mb-4">
+            <p className="text-sm font-semibold text-gray-800">{estimate.number} — {estimate.customer}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">${Number(estimate.amount || 0).toLocaleString()}</p>
+          </div>
+          {/* Name field */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Type your full name..."
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+          </div>
+          {/* Signature pad */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">Signature *</label>
+              <button onClick={clear} className="text-xs text-gray-400 hover:text-gray-600 underline">Clear</button>
+            </div>
+            <div className="border-2 border-dashed border-gray-300 rounded-xl overflow-hidden bg-gray-50 relative">
+              <canvas ref={canvasRef} width={460} height={160} className="w-full touch-none cursor-crosshair"
+                onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+                onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw} />
+              {!hasSignature && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <p className="text-gray-300 text-sm">Sign here with your finger or mouse</p>
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mb-4">By signing, you agree to the terms of this estimate.</p>
+          <button onClick={save} disabled={saving || !hasSignature || !name} className={`w-full ${btnPrimary}`}>
+            {saving ? "Saving..." : "✍️ Sign & Approve Estimate"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── ESTIMATES ────────────────────────────────────────────────────────────────
 const EST_STATUSES = ["Draft", "Sent", "Approved", "Declined"];
 function EstimatesView({ db }) {
@@ -987,6 +1100,7 @@ function EstimatesView({ db }) {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("Estimates");
+  const [signing, setSigning] = useState(null);
   const [form, setForm] = useState({ number: "", customer: "", job: "", date: "", amount: "", status: "Draft", type: "Estimate" });
 
   const load = useCallback(async () => {
@@ -1052,7 +1166,13 @@ function EstimatesView({ db }) {
                   <td className="px-4 py-3 text-gray-700">{item.customer}</td>
                   <td className="px-4 py-3 text-right font-semibold">${Number(item.amount || 0).toLocaleString()}</td>
                   <td className="px-4 py-3 text-center"><Badge label={item.status} /></td>
-                  <td className="px-4 py-3 text-center"><button onClick={() => deleteItem(item.id)} className="text-xs text-red-400 hover:text-red-600">✕</button></td>
+                  <td className="px-4 py-3 text-center flex items-center gap-2 justify-center">
+                    {item.type !== "Invoice" && item.status !== "Approved" && (
+                      <button onClick={() => setSigning(item)} className="text-xs bg-gray-800 text-white px-2 py-1 rounded-lg hover:bg-gray-700">✍️</button>
+                    )}
+                    {item.signature_url && <span title="Signed">✅</span>}
+                    <button onClick={() => deleteItem(item.id)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1071,6 +1191,11 @@ function EstimatesView({ db }) {
           <Field label="Status" value={form.status} onChange={v => setForm({ ...form, status: v })} options={form.type === "Invoice" ? ["Draft", "Sent", "Paid"] : EST_STATUSES} />
           <button onClick={addItem} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Saving..." : `Save ${form.type}`}</button>
         </Modal>
+      )}
+      {signing && (
+        <ESignatureModal estimate={signing} db={db}
+          onClose={() => setSigning(null)}
+          onSigned={() => { setItems(items.map(i => i.id === signing.id ? { ...i, status: "Approved" } : i)); setSigning(null); }} />
       )}
     </div>
   );
@@ -1612,6 +1737,67 @@ function AdminPanel({ db, currentUser, onBadgeUpdate }) {
   );
 }
 
+// ─── CHANGE PASSWORD ──────────────────────────────────────────────────────────
+function ChangePasswordModal({ token, onClose }) {
+  const [current, setCurrent] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const save = async () => {
+    if (!current || !newPass || !confirm) { setMsg("⚠️ Please fill in all fields"); return; }
+    if (newPass !== confirm) { setMsg("⚠️ New passwords don't match"); return; }
+    if (newPass.length < 6) { setMsg("⚠️ Password must be at least 6 characters"); return; }
+    setSaving(true); setMsg("");
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method: "PUT",
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newPass }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.msg || data.message || "Failed to update password");
+      setMsg("✅ Password updated successfully!");
+      setTimeout(() => onClose(), 1500);
+    } catch (e) { Sentry.captureException(e); setMsg("⚠️ " + e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50">
+          <h3 className="text-base font-bold text-gray-900">🔒 Change Password</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+        </div>
+        <div className="px-6 py-5">
+          {msg && <div className={`rounded-xl px-4 py-3 mb-4 text-sm ${msg.startsWith("✅") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>{msg}</div>}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+            <input type="password" value={current} onChange={e => setCurrent(e.target.value)} placeholder="••••••••"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+            <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="••••••••"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+            <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••"
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+              onKeyDown={e => e.key === "Enter" && save()} />
+          </div>
+          <button onClick={save} disabled={saving} className={`w-full ${btnPrimary}`}>
+            {saving ? "Updating..." : "Update Password"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 function RequestAccessScreen({ onBack }) {
   const [form, setForm] = useState({ full_name: "", email: "", reason: "" });
@@ -1753,6 +1939,7 @@ export default function App() {
   const [auth, setAuth] = useState(null);
   const [tab, setTab] = useState("dashboard");
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   const db = auth ? makeDb(auth.session.access_token) : null;
   const isAdmin = auth?.profile?.role === "admin";
@@ -1838,6 +2025,7 @@ export default function App() {
           </div>
         </nav>
         {showUserMenu && <div className="fixed inset-0 z-30" onClick={() => setShowUserMenu(false)} />}
+        {showChangePassword && <ChangePasswordModal token={auth.session.access_token} onClose={() => setShowChangePassword(false)} />}
       </div>
     </Sentry.ErrorBoundary>
   );
