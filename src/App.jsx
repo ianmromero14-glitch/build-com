@@ -1938,6 +1938,188 @@ function LoginScreen({ onLogin }) {
   );
 }
 
+// ─── AI ASSISTANT ────────────────────────────────────────────────────────────
+function AIAssistant({ db, profile, leads, jobs, tasks }) {
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState([
+    { role: "assistant", content: "Hi! I'm your Simplicity AI assistant. I can help you manage leads, jobs, tasks, and more. Try asking me something like:
+
+• 'What jobs are in production?'
+• 'Add a lead for John Smith at 123 Main St'
+• 'What's my pipeline worth?'
+• 'What tasks are due this week?'" }
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+    const userMsg = input.trim();
+    setInput("");
+    setMessages(prev => [...prev, { role: "user", content: userMsg }]);
+    setLoading(true);
+
+    try {
+      // Build context from current app data
+      const context = `
+You are an AI assistant built into Simplicity CRM, a contractor CRM app. You help the user manage their construction business.
+
+CURRENT DATA:
+Leads (${leads.length} total): ${JSON.stringify(leads.slice(0, 20).map(l => ({ id: l.id, name: l.name, stage: l.stage || "Lead", phone: l.phone, email: l.email, address: l.address, proposal_amount: l.proposal_amount, assigned_name: l.assigned_name })))}
+
+Jobs (${jobs.length} total): ${JSON.stringify(jobs.slice(0, 20).map(j => ({ id: j.id, title: j.title, customer: j.customer, stage: j.stage || "In Production", value: j.value, status: j.status })))}
+
+Tasks (${tasks.length} total): ${JSON.stringify(tasks.slice(0, 20).map(t => ({ id: t.id, title: t.title, status: t.status, due: t.due, priority: t.priority })))}
+
+USER: ${profile?.full_name || "Admin"}, Role: ${profile?.role || "admin"}
+
+INSTRUCTIONS:
+- Answer questions about the data above clearly and concisely
+- If asked to CREATE a lead/job/task, respond with a JSON action block like: ACTION:{"type":"create_lead","data":{"name":"...","phone":"...","email":"...","address":"...","stage":"Lead"}}
+- If asked to UPDATE a stage, respond with: ACTION:{"type":"update_lead_stage","id":"...","stage":"..."}
+- If asked to CREATE a task, respond with: ACTION:{"type":"create_task","data":{"title":"...","priority":"Medium","status":"Pending"}}
+- Calculate totals, counts, and summaries from the data when asked
+- Be conversational and helpful
+- Keep responses brief and actionable
+- For pipeline value, sum all proposal_amount fields from leads
+- Lead stages: Lead, Inspection, Proposal Sent, Sold, Lost
+- Job stages: In Production, Invoiced, Complete, Cancelled
+      `;
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1000,
+          messages: [
+            { role: "user", content: context + "
+
+User message: " + userMsg }
+          ],
+        }),
+      });
+
+      const data = await response.json();
+      const text = data.content?.[0]?.text || "Sorry, I couldn't process that.";
+
+      // Check for ACTION commands
+      const actionMatch = text.match(/ACTION:(\{.*?\})/s);
+      let displayText = text.replace(/ACTION:\{.*?\}/s, "").trim();
+      let actionResult = "";
+
+      if (actionMatch) {
+        try {
+          const action = JSON.parse(actionMatch[1]);
+          if (action.type === "create_lead") {
+            const [created] = await db.insert("leads", { ...action.data, stage: action.data.stage || "Lead" });
+            actionResult = `
+
+✅ Lead created for **${created.name}**!`;
+          } else if (action.type === "update_lead_stage") {
+            await db.update("leads", action.id, { stage: action.stage });
+            actionResult = `
+
+✅ Stage updated to **${action.stage}**!`;
+          } else if (action.type === "create_task") {
+            const [created] = await db.insert("tasks", { ...action.data });
+            actionResult = `
+
+✅ Task created: **${created.title}**!`;
+          }
+        } catch (e) {
+          actionResult = "
+
+⚠️ Couldn't complete the action automatically.";
+        }
+      }
+
+      setMessages(prev => [...prev, { role: "assistant", content: displayText + actionResult }]);
+    } catch (e) {
+      Sentry.captureException(e);
+      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I ran into an error. Please try again." }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Floating button */}
+      <button onClick={() => setOpen(!open)}
+        className="fixed bottom-20 right-4 z-50 w-14 h-14 bg-gray-800 hover:bg-gray-700 text-white rounded-full shadow-2xl flex items-center justify-center text-2xl transition-all hover:scale-110">
+        {open ? "✕" : "🤖"}
+      </button>
+
+      {/* Chat panel */}
+      {open && (
+        <div className="fixed bottom-36 right-4 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden" style={{ height: "480px" }}>
+          {/* Header */}
+          <div className="bg-gray-900 px-4 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-lg">🤖</div>
+            <div>
+              <p className="text-sm font-bold text-white">Simplicity AI</p>
+              <p className="text-xs text-gray-400">Ask me anything about your business</p>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${msg.role === "user" ? "bg-gray-800 text-white rounded-br-sm" : "bg-gray-100 text-gray-800 rounded-bl-sm"}`}>
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-2.5">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Quick prompts */}
+          <div className="px-3 py-2 border-t border-gray-100">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {["Pipeline value?", "Jobs this week", "Overdue tasks", "Add a lead"].map(p => (
+                <button key={p} onClick={() => { setInput(p); }}
+                  className="flex-shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full transition-colors">
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Input */}
+          <div className="px-3 pb-3 flex gap-2">
+            <input value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && sendMessage()}
+              placeholder="Ask anything..."
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+            <button onClick={sendMessage} disabled={loading || !input.trim()}
+              className="w-9 h-9 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white rounded-xl flex items-center justify-center text-sm transition-colors">
+              ↑
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── APP ──────────────────────────────────────────────────────────────────────
 const NAV = [
   { id: "dashboard", label: "Dashboard", icon: "⊞" },
@@ -1958,6 +2140,20 @@ export default function App() {
 
   const db = auth ? makeDb(auth.session.access_token) : null;
   const isAdmin = auth?.profile?.role === "admin";
+  const [aiLeads, setAiLeads] = useState([]);
+  const [aiJobs, setAiJobs] = useState([]);
+  const [aiTasks, setAiTasks] = useState([]);
+
+  useEffect(() => {
+    if (!db) return;
+    const loadData = async () => {
+      try {
+        const [l, j, t] = await Promise.all([db.list("leads"), db.list("jobs"), db.list("tasks")]);
+        setAiLeads(l); setAiJobs(j); setAiTasks(t);
+      } catch(e) {}
+    };
+    loadData();
+  }, [auth]);
   const nav = [...NAV, ...(isAdmin ? [{ id: "admin", label: "Admin", icon: "⚙️" }] : [])];
 
   const handleLogin = ({ session, profile }) => {
@@ -2043,6 +2239,7 @@ export default function App() {
 
         {showUserMenu && <div className="fixed inset-0 z-30" onClick={() => setShowUserMenu(false)} />}
         {showChangePassword && <ChangePasswordModal token={auth.session.access_token} onClose={() => setShowChangePassword(false)} />}
+        <AIAssistant db={db} profile={auth.profile} leads={aiLeads} jobs={aiJobs} tasks={aiTasks} />
       </div>
     </Sentry.ErrorBoundary>
   );
