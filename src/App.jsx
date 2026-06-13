@@ -1629,28 +1629,32 @@ function AccessRequests({ onBadgeUpdate }) {
     setApproving(req.id);
     try {
       const password = generatePassword();
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      // Use database function to create user securely
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/create_user_account`, {
         method: "POST",
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ email: req.email, password, email_confirm: true }),
+        body: JSON.stringify({ user_email: req.email, user_password: password, user_full_name: req.full_name }),
       });
-      const user = await res.json();
-      if (!res.ok) throw new Error(user.msg || "Failed to create user");
-      await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${user.id}`, {
-        method: "PATCH",
-        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name: req.full_name, role: "member" }),
-      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err || "Failed to create user");
+      }
+      // Update request status
       await fetch(`${SUPABASE_URL}/rest/v1/access_requests?id=eq.${req.id}`, {
         method: "PATCH",
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({ status: "Approved", auto_password: password }),
       });
+      // Email admin with credentials
       await sendEmail(`🔑 New Account Created for ${req.full_name}`,
         `<div style="font-family:sans-serif;padding:24px;"><h2>✅ Account Created</h2><p>Share these credentials with <strong>${req.full_name}</strong>:</p><p><b>URL:</b> build-com-topaz.vercel.app</p><p><b>Email:</b> ${req.email}</p><p><b>Password:</b> <span style="font-size:20px;font-weight:bold;letter-spacing:3px;">${password}</span></p></div>`);
       setRequests(requests.map(r => r.id === req.id ? { ...r, status: "Approved", auto_password: password } : r));
       onBadgeUpdate && onBadgeUpdate(requests.filter(r => r.status === "Pending" && r.id !== req.id).length);
-      alert(`✅ Account created! Send ${req.full_name} their credentials via text.`);
+      alert(`✅ Account created for ${req.full_name}!
+
+Password: ${password}
+
+Send them this via text!`);
     } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
     finally { setApproving(null); }
   };
