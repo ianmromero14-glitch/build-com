@@ -264,7 +264,7 @@ function ActivityFeed({ relatedId, relatedType }) {
           {activities.map(a => (
             <div key={a.id} className="flex gap-3">
               <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-sm flex-shrink-0">
-                {actionIcon[a.action] || "•"}
+                {actionIcon[a.action] || "-"}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -1650,11 +1650,7 @@ function AccessRequests({ onBadgeUpdate }) {
         `<div style="font-family:sans-serif;padding:24px;"><h2>✅ Account Created</h2><p>Share these credentials with <strong>${req.full_name}</strong>:</p><p><b>URL:</b> build-com-topaz.vercel.app</p><p><b>Email:</b> ${req.email}</p><p><b>Password:</b> <span style="font-size:20px;font-weight:bold;letter-spacing:3px;">${password}</span></p></div>`);
       setRequests(requests.map(r => r.id === req.id ? { ...r, status: "Approved", auto_password: password } : r));
       onBadgeUpdate && onBadgeUpdate(requests.filter(r => r.status === "Pending" && r.id !== req.id).length);
-      alert(`✅ Account created for ${req.full_name}!
-
-Password: ${password}
-
-Send them this via text!`);
+      alert("Account created for " + req.full_name + "! Password: " + password + ". Send via text!");
     } catch (e) { Sentry.captureException(e); alert("Error: " + e.message); }
     finally { setApproving(null); }
   };
@@ -1828,11 +1824,11 @@ function ChangePasswordModal({ token, onClose }) {
         <div className="px-6 py-5">
           {msg && <div className={`rounded-xl px-4 py-3 mb-4 text-sm ${msg.startsWith("✅") ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>{msg}</div>}
           <div className="mb-4"><label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-            <input type="password" value={current} onChange={e => setCurrent(e.target.value)} placeholder="••••••••" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" /></div>
+            <input type="password" value={current} onChange={e => setCurrent(e.target.value)} placeholder="password" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" /></div>
           <div className="mb-4"><label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-            <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="••••••••" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" /></div>
+            <input type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="password" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" /></div>
           <div className="mb-6"><label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-            <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" onKeyDown={e => e.key === "Enter" && save()} /></div>
+            <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="password" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" onKeyDown={e => e.key === "Enter" && save()} /></div>
           <button onClick={save} disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? "Updating..." : "Update Password"}</button>
         </div>
       </div>
@@ -1932,7 +1928,7 @@ function LoginScreen({ onLogin }) {
             <div className="mb-4"><label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" onKeyDown={e => e.key === "Enter" && handleLogin()} /></div>
             <div className="mb-6"><label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" onKeyDown={e => e.key === "Enter" && handleLogin()} /></div>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="password" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" onKeyDown={e => e.key === "Enter" && handleLogin()} /></div>
             <button onClick={handleLogin} disabled={loading} className={`w-full ${btnPrimary}`}>{loading ? "Signing in..." : "Sign In"}</button>
           </div>
           <p className="text-center text-sm text-gray-400 mt-4">Don't have access?{" "}<button onClick={() => setShowRequest(true)} className="text-gray-700 font-semibold hover:underline">Request Access</button></p>
