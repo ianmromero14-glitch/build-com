@@ -1965,30 +1965,20 @@ function AIAssistant({ db, profile, leads, jobs, tasks }) {
 
     try {
       // Build context from current app data
-      const context = `
-You are an AI assistant built into Simplicity CRM, a contractor CRM app. You help the user manage their construction business.
-
-CURRENT DATA:
-Leads (${leads.length} total): ${JSON.stringify(leads.slice(0, 20).map(l => ({ id: l.id, name: l.name, stage: l.stage || "Lead", phone: l.phone, email: l.email, address: l.address, proposal_amount: l.proposal_amount, assigned_name: l.assigned_name })))}
-
-Jobs (${jobs.length} total): ${JSON.stringify(jobs.slice(0, 20).map(j => ({ id: j.id, title: j.title, customer: j.customer, stage: j.stage || "In Production", value: j.value, status: j.status })))}
-
-Tasks (${tasks.length} total): ${JSON.stringify(tasks.slice(0, 20).map(t => ({ id: t.id, title: t.title, status: t.status, due: t.due, priority: t.priority })))}
-
-USER: ${profile?.full_name || "Admin"}, Role: ${profile?.role || "admin"}
-
-INSTRUCTIONS:
-- Answer questions about the data above clearly and concisely
-- If asked to CREATE a lead/job/task, respond with a JSON action block like: ACTION:{"type":"create_lead","data":{"name":"...","phone":"...","email":"...","address":"...","stage":"Lead"}}
-- If asked to UPDATE a stage, respond with: ACTION:{"type":"update_lead_stage","id":"...","stage":"..."}
-- If asked to CREATE a task, respond with: ACTION:{"type":"create_task","data":{"title":"...","priority":"Medium","status":"Pending"}}
-- Calculate totals, counts, and summaries from the data when asked
-- Be conversational and helpful
-- Keep responses brief and actionable
-- For pipeline value, sum all proposal_amount fields from leads
-- Lead stages: Lead, Inspection, Proposal Sent, Sold, Lost
-- Job stages: In Production, Invoiced, Complete, Cancelled
-      `;
+      const leadsData = JSON.stringify(leads.slice(0, 20).map(l => ({ id: l.id, name: l.name, stage: l.stage || "Lead", phone: l.phone, email: l.email, address: l.address, proposal_amount: l.proposal_amount, assigned_name: l.assigned_name })));
+      const jobsData = JSON.stringify(jobs.slice(0, 20).map(j => ({ id: j.id, title: j.title, customer: j.customer, stage: j.stage || "In Production", value: j.value, status: j.status })));
+      const tasksData = JSON.stringify(tasks.slice(0, 20).map(t => ({ id: t.id, title: t.title, status: t.status, due: t.due, priority: t.priority })));
+      const context = "You are an AI assistant for Simplicity CRM. Help manage the construction business.\n\n"
+        + "Leads (" + leads.length + " total): " + leadsData + "\n\n"
+        + "Jobs (" + jobs.length + " total): " + jobsData + "\n\n"
+        + "Tasks (" + tasks.length + " total): " + tasksData + "\n\n"
+        + "USER: " + (profile ? profile.full_name || profile.email : "Admin") + "\n\n"
+        + "INSTRUCTIONS: Answer questions about the data. For pipeline value sum proposal_amount fields. "
+        + "To CREATE a lead reply with: ACTION:{type:create_lead,name:X,phone:X,email:X,address:X,stage:Lead} "
+        + "To UPDATE stage reply with: ACTION:{type:update_lead_stage,id:X,stage:X} "
+        + "To CREATE a task reply with: ACTION:{type:create_task,title:X,priority:Medium} "
+        + "Lead stages: Lead, Inspection, Proposal Sent, Sold, Lost. "
+        + "Job stages: In Production, Invoiced, Complete, Cancelled. Keep responses brief.";
 
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
