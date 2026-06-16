@@ -1946,12 +1946,7 @@ function LoginScreen({ onLogin }) {
 function AIAssistant({ db, profile, leads, jobs, tasks }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: "assistant", content: "Hi! I'm your Simplicity AI assistant. I can help you manage leads, jobs, tasks, and more. Try asking me something like:
-
-• 'What jobs are in production?'
-• 'Add a lead for John Smith at 123 Main St'
-• 'What's my pipeline worth?'
-• 'What tasks are due this week?'" }
+    { role: "assistant", content: "Hi! I am your Simplicity AI assistant. I can help you manage leads, jobs, tasks, and more. Try asking:\n\n- What jobs are in production?\n- Add a lead for John Smith\n- What is my pipeline worth?\n- What tasks are due this week?" }
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
