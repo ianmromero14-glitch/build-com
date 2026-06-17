@@ -1970,35 +1970,15 @@ function AIAssistant({ db, profile, leads, jobs, tasks }) {
         + "If they want to create a lead, reply with CREATELEADSTART then JSON then CREATELEADEND. "
         + "If they want to create a task, reply with CREATETASKSTART then JSON then CREATETASKEND. "
         + "User question: " + userMsg;
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 800,
-          messages: [{ role: "user", content: prompt }],
-        }),
+     }),
       });
-      const data = await response.json();
-      const text = data.content && data.content[0] ? data.content[0].text : "Sorry, I could not process that.";
-      let displayText = text;
-      let actionResult = "";
-      const leadMatch = text.match(/CREATELEADSTART([\s\S]*?)CREATELEADEND/);
-      if (leadMatch) {
-        try {
-          const leadData = JSON.parse(leadMatch[1].trim());
-          const created = await db.insert("leads", Object.assign({ stage: "Lead" }, leadData));
-          actionResult = " Lead created for " + (created[0] ? created[0].name : "new contact") + "!";
-          displayText = text.replace(/CREATELEADSTART[\s\S]*?CREATELEADEND/, "").trim();
-        } catch(e) { actionResult = " Could not create lead automatically."; }
-      }
       const messagesEndRef = useRef(null);
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(function() { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   return (
     <>
-      <button onClick={() => setOpen(!open)}
-        className="fixed bottom-20 right-4 z-50 w-14 h-14 bg-gray-800 hover:bg-gray-700 text-white rounded-full shadow-2xl flex items-center justify-center font-bold text-sm transition-all hover:scale-110">
+      <button onClick={function() { setOpen(!open); }}
+        className="fixed bottom-20 right-4 z-50 w-14 h-14 bg-gray-800 hover:bg-gray-700 text-white rounded-full shadow-2xl flex items-center justify-center font-bold text-sm transition-all">
         {open ? "X" : "AI"}
       </button>
       {open && (
@@ -2030,18 +2010,6 @@ function AIAssistant({ db, profile, leads, jobs, tasks }) {
             )}
             <div ref={messagesEndRef} />
           </div>
-          <div className="px-3 py-2 border-t border-gray-100">
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {["Pipeline value?", "Jobs in production", "Overdue tasks", "Add a lead"].map(function(p) {
-                return (
-                  <button key={p} onClick={function() { setInput(p); }}
-                    className="flex-shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full transition-colors">
-                    {p}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
           <div className="px-3 pb-3 flex gap-2">
             <input value={input} onChange={function(e) { setInput(e.target.value); }}
               onKeyDown={function(e) { if (e.key === "Enter") sendMessage(); }}
@@ -2069,31 +2037,22 @@ export default function App() {
   const [aiJobs, setAiJobs] = useState([]);
   const [aiTasks, setAiTasks] = useState([]);
 
-  useEffect(() => {
+  useEffect(function() {
     const saved = localStorage.getItem("simplicity_auth");
-    if (saved) {
-      try { setAuth(JSON.parse(saved)); } catch (e) { localStorage.removeItem("simplicity_auth"); }
-    }
+    if (saved) { try { setAuth(JSON.parse(saved)); } catch (e) { localStorage.removeItem("simplicity_auth"); } }
   }, []);
 
-  const handleLogin = (authData) => {
-    setAuth(authData);
-    localStorage.setItem("simplicity_auth", JSON.stringify(authData));
-  };
-
-  const handleLogout = async () => {
-    if (auth?.session?.access_token) {
-      try { await signOut(auth.session.access_token); } catch (e) { }
-    }
-    setAuth(null);
-    localStorage.removeItem("simplicity_auth");
+  const handleLogin = function(authData) { setAuth(authData); localStorage.setItem("simplicity_auth", JSON.stringify(authData)); };
+  const handleLogout = async function() {
+    if (auth && auth.session && auth.session.access_token) { try { await signOut(auth.session.access_token); } catch (e) { } }
+    setAuth(null); localStorage.removeItem("simplicity_auth");
   };
 
   if (!auth) return <LoginScreen onLogin={handleLogin} />;
 
   const db = makeDb(auth.session.access_token);
   const profile = auth.profile;
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = profile && profile.role === "admin";
 
   const navItems = [
     { id: "dashboard", icon: "📊", label: "Home" },
@@ -2102,52 +2061,40 @@ export default function App() {
     { id: "estimates", icon: "📋", label: "Estimates" },
     { id: "tasks", icon: "✅", label: "Tasks" },
     { id: "calendar", icon: "📅", label: "Calendar" },
-    ...(isAdmin ? [{ id: "admin", icon: "⚙️", label: "Admin", badge: adminBadge }] : []),
     { id: "recs", icon: "💡", label: "Ideas" },
-  ];
+  ].concat(isAdmin ? [{ id: "admin", icon: "⚙️", label: "Admin", badge: adminBadge }] : []);
 
-  // Load AI data in background
-  useEffect(() => {
-    if (!auth) return;
+  useEffect(function() {
     const d = makeDb(auth.session.access_token);
-    d.list("leads").then(setAiLeads).catch(() => {});
-    d.list("jobs").then(setAiJobs).catch(() => {});
-    d.list("tasks").then(setAiTasks).catch(() => {});
-  }, [auth, tab]);
+    d.list("leads").then(setAiLeads).catch(function() {});
+    d.list("jobs").then(setAiJobs).catch(function() {});
+    d.list("tasks").then(setAiTasks).catch(function() {});
+  }, [tab]);
 
   return (
-    <Sentry.ErrorBoundary fallback={<div className="p-8 text-center"><p className="text-red-600 font-semibold">Something went wrong.</p><button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-xl text-sm">Reload</button></div>}>
-      <div className="min-h-screen bg-gray-50" style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
-        {/* Top bar */}
+    <Sentry.ErrorBoundary fallback={<div className="p-8 text-center"><p className="text-red-600 font-semibold">Something went wrong.</p><button onClick={function() { window.location.reload(); }} className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-xl text-sm">Reload</button></div>}>
+      <div className="min-h-screen bg-gray-50" style={{ fontFamily: "Arial,sans-serif" }}>
         <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-100 shadow-sm">
           <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
             <TetrahedronMark size={36} />
             <div className="relative">
-              <button onClick={() => setShowUserMenu(!showUserMenu)}
+              <button onClick={function() { setShowUserMenu(!showUserMenu); }}
                 className="w-9 h-9 rounded-full bg-gray-800 flex items-center justify-center text-white font-bold text-sm hover:bg-gray-700 transition-colors">
-                {(profile?.full_name || profile?.email || "?")[0].toUpperCase()}
+                {(profile && (profile.full_name || profile.email) || "?")[0].toUpperCase()}
               </button>
               {showUserMenu && (
                 <div className="absolute right-0 top-11 bg-white rounded-2xl shadow-2xl border border-gray-100 w-56 z-50 overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-50">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{profile?.full_name || "User"}</p>
-                    <p className="text-xs text-gray-400 truncate">{profile?.email}</p>
+                    <p className="text-sm font-semibold text-gray-900 truncate">{profile ? (profile.full_name || "User") : "User"}</p>
+                    <p className="text-xs text-gray-400 truncate">{profile ? profile.email : ""}</p>
                   </div>
-                  <button onClick={() => { setShowChangePassword(true); setShowUserMenu(false); }}
-                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                    🔒 Change Password
-                  </button>
-                  <button onClick={() => { handleLogout(); setShowUserMenu(false); }}
-                    className="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2 border-t border-gray-50">
-                    🚪 Sign Out
-                  </button>
+                  <button onClick={function() { setShowChangePassword(true); setShowUserMenu(false); }} className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">🔒 Change Password</button>
+                  <button onClick={function() { handleLogout(); setShowUserMenu(false); }} className="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2 border-t border-gray-50">🚪 Sign Out</button>
                 </div>
               )}
             </div>
           </div>
         </div>
-
-        {/* Main content */}
         <div className="max-w-2xl mx-auto px-4 pt-20 pb-28">
           {tab === "dashboard" && <Dashboard db={db} setTab={setTab} />}
           {tab === "leads" && <LeadsView db={db} token={auth.session.access_token} profile={profile} />}
@@ -2158,29 +2105,21 @@ export default function App() {
           {tab === "admin" && isAdmin && <AdminPanel db={db} currentUser={profile} onBadgeUpdate={setAdminBadge} />}
           {tab === "recs" && <RecommendationsView db={db} profile={profile} />}
         </div>
-
-        {/* Bottom nav */}
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 shadow-lg">
           <div className="max-w-2xl mx-auto px-2 h-16 flex items-center justify-around">
-            {navItems.map(item => (
-              <button key={item.id} onClick={() => setTab(item.id)}
-                className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all relative ${tab === item.id ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}>
+            {navItems.map(function(item) { return (
+              <button key={item.id} onClick={function() { setTab(item.id); }}
+                className={"flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all relative " + (tab === item.id ? "text-gray-900" : "text-gray-400 hover:text-gray-600")}>
                 <span className="text-xl leading-none">{item.icon}</span>
                 <span className="text-[10px] font-medium leading-none">{item.label}</span>
-                {item.badge > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{item.badge}</span>
-                )}
+                {item.badge > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{item.badge}</span>}
                 {tab === item.id && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-gray-800 rounded-full"></span>}
               </button>
-            ))}
+            ); })}
           </div>
         </div>
-
-        {/* AI Assistant */}
         <AIAssistant db={db} profile={profile} leads={aiLeads} jobs={aiJobs} tasks={aiTasks} />
-
-        {/* Change Password Modal */}
-        {showChangePassword && <ChangePasswordModal token={auth.session.access_token} onClose={() => setShowChangePassword(false)} />}
+        {showChangePassword && <ChangePasswordModal token={auth.session.access_token} onClose={function() { setShowChangePassword(false); }} />}
       </div>
     </Sentry.ErrorBoundary>
   );
