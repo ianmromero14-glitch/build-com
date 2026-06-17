@@ -1992,20 +1992,196 @@ function AIAssistant({ db, profile, leads, jobs, tasks }) {
           displayText = text.replace(/CREATELEADSTART[\s\S]*?CREATELEADEND/, "").trim();
         } catch(e) { actionResult = " Could not create lead automatically."; }
       }
-      const taskMatch = text.match(/CREATETASKSTART([\s\S]*?)CREATETASKEND/);
-      if (taskMatch) {
-        try {
-          const taskData = JSON.parse(taskMatch[1].trim());
-          const created = await db.insert("tasks", Object.assign({ status: "Pending", priority: "Medium" }, taskData));
-          actionResult = " Task created: " + (created[0] ? created[0].title : "new task") + "!";
-          displayText = text.replace(/CREATETASKSTART[\s\S]*?CREATETASKEND/, "").trim();
-        } catch(e) { actionResult = " Could not create task automatically."; }
-      }
-      setMessages(function(prev) { return [...prev, { role: "assistant", content: displayText + actionResult }]; });
-    } catch(e) {
-      Sentry.captureException(e);
-      setMessages(function(prev) { return [...prev, { role: "assistant", content: "Sorry, I ran into an error. Please try again." }]; });
-    } finally {
-      setLoading(false);
+      const messagesEndRef = useRef(null);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  return (
+    <>
+      <button onClick={() => setOpen(!open)}
+        className="fixed bottom-20 right-4 z-50 w-14 h-14 bg-gray-800 hover:bg-gray-700 text-white rounded-full shadow-2xl flex items-center justify-center font-bold text-sm transition-all hover:scale-110">
+        {open ? "X" : "AI"}
+      </button>
+      {open && (
+        <div className="fixed bottom-36 right-4 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden" style={{ height: "480px" }}>
+          <div className="bg-gray-900 px-4 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center text-sm font-bold text-white">AI</div>
+            <div><p className="text-sm font-bold text-white">Simplicity AI</p><p className="text-xs text-gray-400">Ask me anything</p></div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.map(function(msg, i) {
+              return (
+                <div key={i} className={msg.role === "user" ? "flex justify-end" : "flex justify-start"}>
+                  <div className={msg.role === "user" ? "max-w-xs bg-gray-800 text-white rounded-2xl px-4 py-2.5 text-sm" : "max-w-xs bg-gray-100 text-gray-800 rounded-2xl px-4 py-2.5 text-sm"}>
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  </div>
+                </div>
+              );
+            })}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-gray-100 rounded-2xl px-4 py-2.5">
+                  <div className="flex gap-1">
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+          <div className="px-3 py-2 border-t border-gray-100">
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {["Pipeline value?", "Jobs in production", "Overdue tasks", "Add a lead"].map(function(p) {
+                return (
+                  <button key={p} onClick={function() { setInput(p); }}
+                    className="flex-shrink-0 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full transition-colors">
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="px-3 pb-3 flex gap-2">
+            <input value={input} onChange={function(e) { setInput(e.target.value); }}
+              onKeyDown={function(e) { if (e.key === "Enter") sendMessage(); }}
+              placeholder="Ask anything..."
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400" />
+            <button onClick={sendMessage} disabled={loading || !input.trim()}
+              className="w-9 h-9 bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white rounded-xl flex items-center justify-center text-sm transition-colors">
+              &gt;
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [auth, setAuth] = useState(null);
+  const [tab, setTab] = useState("dashboard");
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [adminBadge, setAdminBadge] = useState(0);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [aiLeads, setAiLeads] = useState([]);
+  const [aiJobs, setAiJobs] = useState([]);
+  const [aiTasks, setAiTasks] = useState([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("simplicity_auth");
+    if (saved) {
+      try { setAuth(JSON.parse(saved)); } catch (e) { localStorage.removeItem("simplicity_auth"); }
     }
+  }, []);
+
+  const handleLogin = (authData) => {
+    setAuth(authData);
+    localStorage.setItem("simplicity_auth", JSON.stringify(authData));
   };
+
+  const handleLogout = async () => {
+    if (auth?.session?.access_token) {
+      try { await signOut(auth.session.access_token); } catch (e) { }
+    }
+    setAuth(null);
+    localStorage.removeItem("simplicity_auth");
+  };
+
+  if (!auth) return <LoginScreen onLogin={handleLogin} />;
+
+  const db = makeDb(auth.session.access_token);
+  const profile = auth.profile;
+  const isAdmin = profile?.role === "admin";
+
+  const navItems = [
+    { id: "dashboard", icon: "📊", label: "Home" },
+    { id: "leads", icon: "👥", label: "Pipeline" },
+    { id: "jobs", icon: "🏗️", label: "Jobs" },
+    { id: "estimates", icon: "📋", label: "Estimates" },
+    { id: "tasks", icon: "✅", label: "Tasks" },
+    { id: "calendar", icon: "📅", label: "Calendar" },
+    ...(isAdmin ? [{ id: "admin", icon: "⚙️", label: "Admin", badge: adminBadge }] : []),
+    { id: "recs", icon: "💡", label: "Ideas" },
+  ];
+
+  // Load AI data in background
+  useEffect(() => {
+    if (!auth) return;
+    const d = makeDb(auth.session.access_token);
+    d.list("leads").then(setAiLeads).catch(() => {});
+    d.list("jobs").then(setAiJobs).catch(() => {});
+    d.list("tasks").then(setAiTasks).catch(() => {});
+  }, [auth, tab]);
+
+  return (
+    <Sentry.ErrorBoundary fallback={<div className="p-8 text-center"><p className="text-red-600 font-semibold">Something went wrong.</p><button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-gray-800 text-white rounded-xl text-sm">Reload</button></div>}>
+      <div className="min-h-screen bg-gray-50" style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif" }}>
+        {/* Top bar */}
+        <div className="fixed top-0 left-0 right-0 z-40 bg-white border-b border-gray-100 shadow-sm">
+          <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+            <TetrahedronMark size={36} />
+            <div className="relative">
+              <button onClick={() => setShowUserMenu(!showUserMenu)}
+                className="w-9 h-9 rounded-full bg-gray-800 flex items-center justify-center text-white font-bold text-sm hover:bg-gray-700 transition-colors">
+                {(profile?.full_name || profile?.email || "?")[0].toUpperCase()}
+              </button>
+              {showUserMenu && (
+                <div className="absolute right-0 top-11 bg-white rounded-2xl shadow-2xl border border-gray-100 w-56 z-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-50">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{profile?.full_name || "User"}</p>
+                    <p className="text-xs text-gray-400 truncate">{profile?.email}</p>
+                  </div>
+                  <button onClick={() => { setShowChangePassword(true); setShowUserMenu(false); }}
+                    className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                    🔒 Change Password
+                  </button>
+                  <button onClick={() => { handleLogout(); setShowUserMenu(false); }}
+                    className="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2 border-t border-gray-50">
+                    🚪 Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Main content */}
+        <div className="max-w-2xl mx-auto px-4 pt-20 pb-28">
+          {tab === "dashboard" && <Dashboard db={db} setTab={setTab} />}
+          {tab === "leads" && <LeadsView db={db} token={auth.session.access_token} profile={profile} />}
+          {tab === "jobs" && <JobsView db={db} token={auth.session.access_token} profile={profile} />}
+          {tab === "estimates" && <EstimatesView db={db} />}
+          {tab === "tasks" && <TasksView db={db} />}
+          {tab === "calendar" && <CalendarView db={db} />}
+          {tab === "admin" && isAdmin && <AdminPanel db={db} currentUser={profile} onBadgeUpdate={setAdminBadge} />}
+          {tab === "recs" && <RecommendationsView db={db} profile={profile} />}
+        </div>
+
+        {/* Bottom nav */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 shadow-lg">
+          <div className="max-w-2xl mx-auto px-2 h-16 flex items-center justify-around">
+            {navItems.map(item => (
+              <button key={item.id} onClick={() => setTab(item.id)}
+                className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-xl transition-all relative ${tab === item.id ? "text-gray-900" : "text-gray-400 hover:text-gray-600"}`}>
+                <span className="text-xl leading-none">{item.icon}</span>
+                <span className="text-[10px] font-medium leading-none">{item.label}</span>
+                {item.badge > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{item.badge}</span>
+                )}
+                {tab === item.id && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-gray-800 rounded-full"></span>}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* AI Assistant */}
+        <AIAssistant db={db} profile={profile} leads={aiLeads} jobs={aiJobs} tasks={aiTasks} />
+
+        {/* Change Password Modal */}
+        {showChangePassword && <ChangePasswordModal token={auth.session.access_token} onClose={() => setShowChangePassword(false)} />}
+      </div>
+    </Sentry.ErrorBoundary>
+  );
+}
