@@ -871,6 +871,8 @@ function LeadsView({ db, token, profile }) {
   const [stageFilter, setStageFilter] = useState("All");
   const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", source: "Referral", stage: "New Lead", notes: "" });
   const [saving, setSaving] = useState(false);
+  const isOwner = profile && profile.email === "ianmromero14@gmail.com";
+
 
   const load = useCallback(async function() {
     setLoading(true);
@@ -934,6 +936,7 @@ function LeadsView({ db, token, profile }) {
   };
 
   const deleteLead = async function(id) {
+    if (!isOwner) { alert("Only Ian can delete leads."); return; }
     if (!confirm("Delete this lead? This cannot be undone.")) return;
     setLeads(leads.filter(function(l) { return l.id !== id; }));
     try { await db.delete("leads", id); } catch (e) { Sentry.captureException(e); load(); }
@@ -1017,7 +1020,7 @@ function LeadsView({ db, token, profile }) {
                       {lead.proposal_amount > 0 && <p className="text-xs font-bold text-gray-700">💰 ${Number(lead.proposal_amount).toLocaleString()}</p>}
                     </div>
                   </div>
-                  <button onClick={function(e) { e.stopPropagation(); deleteLead(lead.id); }} className="text-xs text-red-300 hover:text-red-500 px-2 flex-shrink-0">Del</button>
+                  {isOwner && <button onClick={function(e) { e.stopPropagation(); deleteLead(lead.id); }} className="text-xs text-red-300 hover:text-red-500 px-2 flex-shrink-0">Del</button>}
                 </div>
               </div>
             );
