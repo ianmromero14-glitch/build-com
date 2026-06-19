@@ -204,6 +204,36 @@ function AddressLink({ address, className }) {
   );
 }
 
+function CallTextButtons({ phone, relatedId, relatedType, userName, onLogged }) {
+  if (!phone) return null;
+  const cleanPhone = phone.replace(/[^0-9+]/g, "");
+
+  const handleCall = async function() {
+    await logActivity(null, relatedId, relatedType, "Call", "Called " + phone, userName || "Team");
+    if (onLogged) onLogged();
+    window.location.href = "tel:" + cleanPhone;
+  };
+
+  const handleText = async function() {
+    await logActivity(null, relatedId, relatedType, "Text", "Texted " + phone, userName || "Team");
+    if (onLogged) onLogged();
+    window.location.href = "sms:" + cleanPhone;
+  };
+
+  return (
+    <div className="flex gap-2 mb-4">
+      <button onClick={handleCall} type="button"
+        className="flex-1 flex items-center justify-center gap-2 bg-green-50 border border-green-200 text-green-700 font-semibold py-2.5 rounded-xl text-sm hover:bg-green-100 transition-colors">
+        📞 Call
+      </button>
+      <button onClick={handleText} type="button"
+        className="flex-1 flex items-center justify-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 font-semibold py-2.5 rounded-xl text-sm hover:bg-blue-100 transition-colors">
+        💬 Text
+      </button>
+    </div>
+  );
+}
+
 // ─── LOGO ─────────────────────────────────────────────────────────────────────
 function Logo({ size }) {
   size = size || 32;
@@ -626,6 +656,7 @@ function LeadDetail({ lead, db, token, profile, onClose, onUpdate, onConvert }) 
         <div className="px-5 pb-5 space-y-0">
           <Field label="Full Name" value={form.name} onChange={function(v) { setForm(Object.assign({}, form, { name: v })); }} required />
           <Field label="Phone" value={form.phone} onChange={function(v) { setForm(Object.assign({}, form, { phone: v })); }} type="tel" />
+          <CallTextButtons phone={form.phone} relatedId={lead.id} relatedType="lead" userName={profile ? profile.full_name || profile.email : "Team"} />
           <Field label="Email" value={form.email} onChange={function(v) { setForm(Object.assign({}, form, { email: v })); }} type="email" />
           <Field label="Address" value={form.address} onChange={function(v) { setForm(Object.assign({}, form, { address: v })); }} />
           {form.address && (
@@ -765,6 +796,7 @@ function JobDetail({ job, db, token, profile, onClose, onUpdate }) {
           <Field label="Job Title" value={form.title} onChange={function(v) { setForm(Object.assign({}, form, { title: v })); }} required />
           <Field label="Customer Name" value={form.customer} onChange={function(v) { setForm(Object.assign({}, form, { customer: v })); }} />
           <Field label="Phone" value={form.phone} onChange={function(v) { setForm(Object.assign({}, form, { phone: v })); }} type="tel" />
+          <CallTextButtons phone={form.phone} relatedId={job.id} relatedType="job" userName={profile ? profile.full_name || profile.email : "Team"} />
           <Field label="Email" value={form.email} onChange={function(v) { setForm(Object.assign({}, form, { email: v })); }} type="email" />
           <Field label="Address" value={form.address} onChange={function(v) { setForm(Object.assign({}, form, { address: v })); }} />
           {form.address && (
