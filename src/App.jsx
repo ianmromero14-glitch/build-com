@@ -189,6 +189,21 @@ const btnPrimary = "w-full bg-gray-900 hover:bg-gray-800 disabled:opacity-50 tex
 const btnSm = "bg-gray-900 hover:bg-gray-800 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors flex-shrink-0";
 const btnOutline = "border border-gray-200 hover:border-gray-400 bg-white text-gray-700 font-semibold px-4 py-2 rounded-xl text-sm transition-colors flex-shrink-0";
 
+function mapsUrl(address) {
+  return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(address);
+}
+
+function AddressLink({ address, className }) {
+  if (!address) return null;
+  return (
+    <a href={mapsUrl(address)} target="_blank" rel="noreferrer"
+      onClick={function(e) { e.stopPropagation(); }}
+      className={(className || "") + " text-blue-600 hover:underline inline-flex items-center gap-1"}>
+      📍 {address}
+    </a>
+  );
+}
+
 // ─── LOGO ─────────────────────────────────────────────────────────────────────
 function Logo({ size }) {
   size = size || 32;
@@ -613,6 +628,12 @@ function LeadDetail({ lead, db, token, profile, onClose, onUpdate, onConvert }) 
           <Field label="Phone" value={form.phone} onChange={function(v) { setForm(Object.assign({}, form, { phone: v })); }} type="tel" />
           <Field label="Email" value={form.email} onChange={function(v) { setForm(Object.assign({}, form, { email: v })); }} type="email" />
           <Field label="Address" value={form.address} onChange={function(v) { setForm(Object.assign({}, form, { address: v })); }} />
+          {form.address && (
+            <a href={mapsUrl(form.address)} target="_blank" rel="noreferrer"
+              className="flex items-center justify-center gap-2 w-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold py-2.5 rounded-xl text-sm mb-4 hover:bg-blue-100 transition-colors">
+              🗺️ Get Directions
+            </a>
+          )}
           <Field label="Source" value={form.source} onChange={function(v) { setForm(Object.assign({}, form, { source: v })); }} options={LEAD_SOURCES} />
           <Field label="Proposal Amount ($)" value={form.proposal_amount} onChange={function(v) { setForm(Object.assign({}, form, { proposal_amount: v })); }} type="number" />
           <Field label="Inspection Date" value={form.inspection_date} onChange={function(v) { setForm(Object.assign({}, form, { inspection_date: v })); }} type="datetime-local" />
@@ -746,6 +767,12 @@ function JobDetail({ job, db, token, profile, onClose, onUpdate }) {
           <Field label="Phone" value={form.phone} onChange={function(v) { setForm(Object.assign({}, form, { phone: v })); }} type="tel" />
           <Field label="Email" value={form.email} onChange={function(v) { setForm(Object.assign({}, form, { email: v })); }} type="email" />
           <Field label="Address" value={form.address} onChange={function(v) { setForm(Object.assign({}, form, { address: v })); }} />
+          {form.address && (
+            <a href={mapsUrl(form.address)} target="_blank" rel="noreferrer"
+              className="flex items-center justify-center gap-2 w-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold py-2.5 rounded-xl text-sm mb-4 hover:bg-blue-100 transition-colors">
+              🗺️ Get Directions
+            </a>
+          )}
           <Field label="Job Type" value={form.type} onChange={function(v) { setForm(Object.assign({}, form, { type: v })); }} options={JOB_TYPES} />
           <Field label="Contract Value ($)" value={form.value} onChange={function(v) { setForm(Object.assign({}, form, { value: v })); }} type="number" />
           <Field label="Start Date" value={form.start_date} onChange={function(v) { setForm(Object.assign({}, form, { start_date: v })); }} type="date" />
@@ -808,7 +835,7 @@ function KanbanBoard({ leads, onSelect, onStageChange }) {
                       {lead.proposal_amount > 0 && (
                         <p className="text-xs font-bold text-gray-800">${Number(lead.proposal_amount).toLocaleString()}</p>
                       )}
-                      {lead.address && <p className="text-[10px] text-gray-400 mt-1 truncate">{lead.address}</p>}
+                      {lead.address && <AddressLink address={lead.address} className="text-[10px] mt-1 block truncate" />}
                       {lead.inspection_date && (
                         <p className="text-[10px] text-purple-500 mt-1">🔍 {new Date(lead.inspection_date).toLocaleDateString()}</p>
                       )}
@@ -985,7 +1012,8 @@ function LeadsView({ db, token, profile }) {
                         <Badge label={lead.stage || "New Lead"} />
                         {lead.claim_number && <span className="text-xs text-blue-500">📋 Insurance</span>}
                       </div>
-                      <p className="text-sm text-gray-500 truncate">{lead.phone}{lead.address ? " · " + lead.address : ""}</p>
+                      <p className="text-sm text-gray-500 truncate">{lead.phone}</p>
+                      {lead.address && <AddressLink address={lead.address} className="text-xs" />}
                       {lead.proposal_amount > 0 && <p className="text-xs font-bold text-gray-700">💰 ${Number(lead.proposal_amount).toLocaleString()}</p>}
                     </div>
                   </div>
@@ -1120,7 +1148,8 @@ function JobsView({ db, token, profile }) {
                       <span className="font-semibold text-gray-900">{job.title}</span>
                       <Badge label={job.stage || "Scheduled"} />
                     </div>
-                    <p className="text-sm text-gray-500 truncate">{job.customer}{job.address ? " · " + job.address : ""}</p>
+                    <p className="text-sm text-gray-500 truncate">{job.customer}</p>
+                    {job.address && <AddressLink address={job.address} className="text-xs" />}
                     <div className="flex items-center gap-3 mt-1">
                       <span className="text-sm font-bold text-gray-900">${Number(job.value || 0).toLocaleString()}</span>
                       {job.crew && <span className="text-xs text-gray-400">👷 {job.crew}</span>}
